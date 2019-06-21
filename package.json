@@ -13,6 +13,7 @@
     "@types/chai": "^4.1.7",
     "@types/mocha": "^5.2.7",
     "chai": "^4.2.0",
+    "jest": "^24.8.0",
     "mocha": "^6.1.4",
     "webpack": "^4.32.2",
     "webpack-cli": "^3.3.2"
@@ -20,6 +21,7 @@
   "dependencies": {
     "@erebos/keccak256": "^0.7.0",
     "@erebos/secp256k1": "^0.7.0",
-    "@erebos/swarm": "^0.7.0"
+    "@erebos/swarm": "^0.8.1",
+    "@erebos/swarm-node": "^0.8.1"
   }
 }
