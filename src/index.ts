@@ -10,14 +10,8 @@ import { pubKeyToAddress, hash } from '@erebos/keccak256'
 //
 // these two values should be filled in by chat requester when starting a new chat
 // if they are empty, the code should initiate a new chat
-var keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
-if (typeof window !== 'undefined') {
-	var re = new RegExp('?[a-fA-Z0-9]*$);
-	var results = re.exec(window.location.href);
-	if (results) {
-		keyTmpRequestPriv = results[2];
-	}
-}
+let keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
+
 
 // OMIT FOR BROWSER COMPILE
 // dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
@@ -205,8 +199,9 @@ const signerTmp = async bytes => sign(bytes, keyPairTmp.getPrivate());
 
 
 // the peer
-var keyPairOtherPub = undefined;
-var userOther = undefined;
+let keyPairOtherPub = undefined;
+let userOther = undefined;
+
 
 // set up the session object
 const chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf); 
@@ -281,8 +276,6 @@ async function checkResponse(myHash:string, bz:any, attempts:number):Promise<str
 
 		const handshakeOther = await r.text();
 		const userOther = await connectToPeer(handshakeOther, undefined);
-
-		// share the good news
 		return userOther;
 	}	
 }
@@ -331,14 +324,16 @@ async function startRequest():Promise<string> {
 async function startResponse():Promise<string> {
 	// TODO: derive proper secret from own privkey
 	const secret = ZEROHASH;
-
 	const signBytes = signerTmp;
-	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
+	const bz = new BzzAPI({ url: GATEWAY_URL, signBytes: signerTmp });
 
 	const r = await downloadFromFeed(bz, userTmp, topicTmp);
 	const handshakePubOther = await r.text();
-
+	const keyPairOtherPub = createPublic(handshakePubOther);
+	//const userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
 	const userOther = await connectToPeer(handshakePubOther, bz);
+
+	await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
 	return userOther;
 }
 

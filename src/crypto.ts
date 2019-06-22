@@ -45,24 +45,75 @@ function deserializeEncrypted(j) {
 	}
 	return e;
 }
+
+// TODO: switch to CTR but needs renegotiation implemented
+class ChatCipher {
+	_nextSerial: number = 0
+	_aes: any
+
+	// takes hex only for now
+	constructor(secret:string) {
+		const secretArray = createHex("0x" + secret).toBytesArray();
+		//this._aes = new aesjs.ModeOfOperation.ctr(secretArray, new aesjs.Counter(serial));
+		this._aes = new aesjs.ModeOfOperation.ecb(secretArray);
+	}
+	// assumes utf8 input
+	encrypt = (data:string, serial:number):string => {
+		if (serial != this._nextSerial) {
+			return undefined;
+		}
+		let databytes = aesjs.utils.utf8.toBytes(data);
+		databytes = this.pad(databytes);
+		const ciphertext = this._aes.encrypt(databytes);
+		this._nextSerial++;
+		return ciphertext
+	}
+
+	// TODO: its uint8array but Array<number> doesn't work, test what does to safely type
+	pad = (data:any):any => {
+		const padNeeded = 16 - (data.length % 16);
+
+		// TODO: can assign and guarantee init values to 0?
+		let pad = [];
+		for (var i = 0; i < padNeeded; i++) {
+			pad.push(0x00);
+		}
+
+		console.log("datasize: " + data.length + " pad " + padNeeded);	
+		const buf = new ArrayBuffer(data.length + padNeeded);
+		let newdata = new Uint8Array(buf);
+		newdata.set(data, 0);
+		newdata.set(pad, data.length);
+		console.log("newdata: " + newdata.length);
+		return newdata;
+	}
+
+	// gives utf8 output
+	decrypt = (data:string, serial:number):string => {
+		return data
+	}
+}
+
+var data = "abcæøå";
 var secret = "c9d709ffaae7632f2c243271702a1dad461abb2055e9ba7dd9d46b3a17949dfe";
-var secretArray = createHex("0x" + secret).toBytesArray();
-var aes = new aesjs.ModeOfOperation.ctr(secretArray);
-var databytes = aesjs.utils.utf8.toBytes("abcæøå");
-console.log("databytes:" + databytes.toString());
-var cryptbytes = aes.encrypt(databytes);
-console.log("cryptbytes:" + cryptbytes.toString());
-var aesd = new aesjs.ModeOfOperation.ctr(secretArray);
-var plainbytes = aesd.decrypt(cryptbytes).toString();
-console.log("plainbytes:" + plainbytes.toString());
+var c = new ChatCipher(secret);
 
-encryptSecret(ec.getPublic(pk), "foo").then(function(o) {
-	var s = serializeEncrypted(o);
-	console.log(s);
-	var e = deserializeEncrypted(s);
-	decryptSecret(pk, e).then(function(p) {
-		console.log(p);
-	}).catch(console.log);
-}).catch(console.log);
+for (var i = 0; i < 5; i++) {
+	console.log(c.encrypt(data, i));
+}
 
+var c = new ChatCipher(secret);
+for (var i = 0; i < 5; i++) {
+	console.log(c.encrypt(data, i));
+}
+//
+//var secretArray = createHex("0x" + secret).toBytesArray();
+//var aes = new aesjs.ModeOfOperation.ctr(secretArray);
+//var databytes = aesjs.utils.utf8.toBytes();
+//console.log("databytes:" + databytes.toString());
+//var cryptbytes = aes.encrypt(databytes);
+//console.log("cryptbytes:" + cryptbytes.toString());
+//var aesd = new aesjs.ModeOfOperation.ctr(secretArray);
+//var plainbytes = aesd.decrypt(cryptbytes).toString();
+//console.log("plainbytes:" + plainbytes.toString());
 //
