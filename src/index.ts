@@ -10,14 +10,18 @@ import { pubKeyToAddress, hash } from '@erebos/keccak256'
 //
 // these two values should be filled in by chat requester when starting a new chat
 // if they are empty, the code should initiate a new chat
-let keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
-//let keyOtherPub = ""; 		// the public key of the chat requester
+var keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
+if (typeof window !== 'undefined') {
+	var re = new RegExp('?[a-fA-Z0-9]*$);
+	var results = re.exec(window.location.href);
+	if (results) {
+		keyTmpRequestPriv = results[2];
+	}
+}
 
 // OMIT FOR BROWSER COMPILE
 // dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
 if (process.argv.length > 2) {
-//	keyOtherPub = process.argv[2];
-//	console.log("using other from cli: " + keyOtherPub);
 	keyTmpRequestPriv = process.argv[2];
 	console.log("using tmpkey from cli: " + keyTmpRequestPriv);
 }
@@ -201,13 +205,11 @@ const signerTmp = async bytes => sign(bytes, keyPairTmp.getPrivate());
 
 
 // the peer
-let keyPairOtherPub = undefined;
-let userOther = undefined;
-
+var keyPairOtherPub = undefined;
+var userOther = undefined;
 
 // set up the session object
 const chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf); 
-
 
 
 // debug
