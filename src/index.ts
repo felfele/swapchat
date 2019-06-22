@@ -54,15 +54,15 @@ class ChatMessage {
 		this._serial = serial;
 	}
 
-	addPayload(payload: string) {
+	addPayload = (payload: string) => {
 		this._payload += payload;
 	}
 	
-	setEnd() {
+	setEnd = () => {
 		this._end = true;
 	}
 
-	toString(): string {
+	toString = (): string => {
 		let o = {
 			serial: this._serial,
 			lastSelf: this._lastHashSelf,
@@ -107,18 +107,18 @@ class ChatSession {
 		this._ready = true;
 	}
 
-	userToTopic(user: string): string {
+	userToTopic = (user: string): string => {
 		return createHex(user).toBuffer();
 	}
 
-	getStarted(): number {
+	getStarted = (): number => {
 		return this._startedAt;
 	}
 
 	// create a new message from the current state
 	// the creation of new messages will be locked until the message is sent
 	// if locked, undefined will be returned
-	newMessage(): ChatMessage {
+	newMessage = (): ChatMessage => {
 		if (!this._ready) {
 			return undefined;
 		}
@@ -130,16 +130,16 @@ class ChatSession {
 
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
-	sendMessage(msg: ChatMessage) {
+	sendMessage = (msg: ChatMessage) => {
 		this._lastAt = Date.now();
 		console.log("todo SEND: " + msg);
 		this._ready = true;
 	}
 
 	// starts the retrieve and post loop after we know the user of the other party
-	start(userOther: string, secret: string): Promise<any> { 
+	start = (userOther: string, secret: string): Promise<any> => { 
 		let self = this;
-		return new Promise(function(whohoo, doh) {
+		return new Promise((whohoo, doh) => {
 			self._userOther = userOther;
 			self._topicMe = getFeedTopic({
 				name: self.userToTopic(self._userOther)
@@ -150,7 +150,7 @@ class ChatSession {
 	}
 
 	// make sure we have pings sent every period if no other message is in the process of being sent
-	_run(self: any) {
+	_run = (self: any) => {
 		if (self._ready && Date.now() - self._lastAt > MSGPERIOD) {
 			let msg = self.newMessage();
 			self.sendMessage(msg);
@@ -158,9 +158,9 @@ class ChatSession {
 	}
 
 	// teardown of chat session
-	stop(): Promise<any> {
+	stop = (): Promise<any> => {
 		let self = this;
-		return new Promise(function(whohoo, doh) {
+		return new Promise((whohoo, doh) => {
 			clearInterval(self._loop);
 			let tryStop = setInterval(function() {
 				if (self._ready) {
@@ -175,7 +175,7 @@ class ChatSession {
 	}
 
 	// perhaps we should abstract all BzzAPI calls instead
-	bzz(): any {
+	bzz = (): any => {
 		return this._bzz;
 	}
 }
@@ -231,7 +231,7 @@ function uploadToFeed(bz: any, user: string, topic: string, data: string): Promi
 		topic: topic,
 	}
 
-	return new Promise(function(whohoo, doh) {	
+	return new Promise((whohoo, doh) => {	
 		console.log("uploading " + data);
 		bz.upload(
 			data, 
@@ -269,7 +269,7 @@ function startRequest() {
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
 	// on success passes user address for peer
-	return new Promise(function(whohoo, doh) {
+	return new Promise((whohoo, doh) => {
 		uploadToFeed(bz, userTmp, topicTmp, keyPubSelf).then(function(myHash) {
 			console.log("uploaded to " + myHash);
 			publishResponseScript();
@@ -327,7 +327,7 @@ function startResponse() {
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
-	return new Promise(function(whohoo, doh) {
+	return new Promise((whohoo, doh) => {
 		downloadFromFeed(bz, userTmp, topicTmp).then(function(r) {
 			r.text().then(function(handshakePubOther) {
 				// NB these are globalsss
