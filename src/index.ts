@@ -37,7 +37,6 @@ const ZEROHASH = '0x000000000000000000000000000000000000000000000000000000000000
 const MSGPERIOD = 1000;
 const MAXCONNECTIONPOLLS = 3;
 
-
 // Represents messages sent between the peers
 // A message without a payload is considered a "ping" message
 // If end is set, peer must terminate the chat
@@ -142,11 +141,11 @@ class ChatSession {
 	// starts the retrieve and post loop after we know the user of the other party
 	public async start(userOther: string, secret: string): Promise<any> { 
 		console.log("secret: " + secret);
-//		if (secret.substring(0, 2) === "0x") {
-//			secret = secret.substring(2, secret.length-2);
-//		}
+		if (secret.substring(0, 2) === "0x") {
+			secret = secret.substring(2, secret.length);
+		}
 		this._inCrypt = new ChatCipher(secret);
-		this._outCrypt = this._inCrypt;
+		this._outCrypt = new ChatCipher(secret);
 		this._userOther = userOther;
 		this._topicMe = getFeedTopic({
 			name: this.userToTopic(this._userOther)
@@ -235,11 +234,12 @@ function newPrivateKey() {
 }
 
 function encryptSecret(pubkey, data) {
+	console.log("encrypting secret" + data);
 	return ec.encrypt(pubkey, Buffer.from(data));
 }
 
 function decryptSecret(privkey, data) {
-	console.log("decrypting" + data);
+	console.log("decrypting secret" + data);
 	return ec.decrypt(privkey, data);
 }
 
@@ -270,8 +270,9 @@ class ChatCipher {
 
 	// takes hex only for now
 	constructor(secret:string) {
-		const secretArray = createHex("0x" + secret).toBytesArray();
+		//const secretArray = createHex("0x" + secret).toBytesArray();
 		//this._aes = new aesjs.ModeOfOperation.ctr(secretArray, new aesjs.Counter(serial));
+		const secretArray = hexToArray(secret);
 		this._aes = new aesjs.ModeOfOperation.ecb(secretArray);
 	}
 
@@ -395,12 +396,16 @@ function publishResponseScript() {
 async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
-	keyPairOtherPub = createPublic(handshakeOther.substring(0, 130)); // NB! global!
-
-	let secret = handshakeOther.substring(130, 130+64);
+	keyPairOtherPub = createPublic(handshakeOther.substring(0, 130));
+	let secret = handshakeOther.substring(130, handshakeOther.length);
+	console.log("payload pub " + handshakeOther.substring(0, 130));
+	console.log("payload sec " + secret);
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+
 	if (bz !== undefined) {
-		await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
+		const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
+		console.log("uploaded to " + myHash);
+		publishResponseScript();
 	}
 	await chatSession.start(keyPairOtherPub, secret);
 	return userOther;
@@ -447,7 +452,6 @@ async function startRequest():Promise<string> {
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
-	// on success passes user address for peer
 	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
 	console.log("uploaded to " + myHash);
 	publishResponseScript();
@@ -461,11 +465,13 @@ async function startRequest():Promise<string> {
 		await waitUntil(jetzt);
 	}
 	throw("no response");
+
 }
 
 async function startResponse():Promise<string> {
 	// TODO: derive proper secret from own privkey
 	const secret = ZEROHASH;
+	console.log("secret zero: " + secret.length);
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL, signBytes: signerTmp });
 
@@ -503,5 +509,3 @@ if (keyTmpRequestPriv === undefined) {
 		console.error("error starting response: " + e);
 	});
 }
-
-
