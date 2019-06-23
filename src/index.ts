@@ -54,15 +54,15 @@ class ChatMessage {
 		this._serial = serial;
 	}
 
-	addPayload = (payload: string) => {
+	public addPayload = (payload: string) => {
 		this._payload += payload;
 	}
 	
-	setEnd = () => {
+	public setEnd = () => {
 		this._end = true;
 	}
 
-	toString = (): string => {
+	public toString = (): string => {
 		let o = {
 			serial: this._serial,
 			lastSelf: this._lastHashSelf,
@@ -107,18 +107,18 @@ class ChatSession {
 		this._ready = true;
 	}
 
-	userToTopic = (user: string): string => {
+	public userToTopic = (user: string): string => {
 		return createHex(user).toBuffer();
 	}
 
-	getStarted = (): number => {
+	public getStarted = (): number => {
 		return this._startedAt;
 	}
 
 	// create a new message from the current state
 	// the creation of new messages will be locked until the message is sent
 	// if locked, undefined will be returned
-	newMessage = (): ChatMessage => {
+	public newMessage = (): ChatMessage => {
 		if (!this._ready) {
 			return undefined;
 		}
@@ -130,14 +130,14 @@ class ChatSession {
 
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
-	sendMessage = (msg: ChatMessage) => {
+	public sendMessage = (msg: ChatMessage) => {
 		this._lastAt = Date.now();
 		console.log("todo SEND: " + msg);
 		this._ready = true;
 	}
 
 	// starts the retrieve and post loop after we know the user of the other party
-	start = (userOther: string, secret: string): Promise<any> => { 
+	public async start(userOther: string, secret: string): Promise<any> { 
 		let self = this;
 		return new Promise((whohoo, doh) => {
 			self._userOther = userOther;
@@ -158,7 +158,7 @@ class ChatSession {
 	}
 
 	// teardown of chat session
-	stop = (): Promise<any> => {
+	public async stop(): Promise<any> {
 		let self = this;
 		return new Promise((whohoo, doh) => {
 			clearInterval(self._loop);
@@ -175,7 +175,7 @@ class ChatSession {
 	}
 
 	// perhaps we should abstract all BzzAPI calls instead
-	bzz = (): any => {
+	public bzz = (): any => {
 		return this._bzz;
 	}
 }
@@ -224,14 +224,14 @@ console.log("user other: " + userOther);
 console.log("other's feed: " + chatSession._topicOther);
 
 
-function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<any> {
+async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
 
 	const feedOptions = {
 		user: user,
 		topic: topic,
 	}
 
-	return new Promise((whohoo, doh) => {	
+	return new Promise<string>(async (whohoo, doh) => {	
 		console.log("uploading " + data);
 		bz.upload(
 			data, 
@@ -261,103 +261,117 @@ function publishResponseScript() {
 	return
 }
 
+
+// if bz is supplied, will update tmp feed
+async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
+	return new Promise(async (whohoo, doh) => {	
+		// set up the user info for the peer
+		// and start the chat session with that info
+		keyPairOtherPub = createPublic(handshakeOther.substring(0, 130)); // NB! global!
+
+		let secret = handshakeOther.substring(130, 130+64);
+		userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+		if (bz !== undefined) {
+			await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
+		}
+		await chatSession.start(keyPairOtherPub, secret);
+		whohoo(userOther);
+	});
+}
+
+async function checkResponse(myHash:string, bz:any):Promise<string> {
+	return new Promise<string>(async (whohoo,doh) => {
+		let attempts = 0;
+		const detectStart = setInterval(async () => {
+			console.log("check if started, attempt " + attempts);
+			if (attempts > MAXCONNECTIONPOLLS) {
+				clearInterval(detectStart);
+				doh("timeout waiting for other side to respond");
+			}
+			const r = await downloadFromFeed(bz, userTmp, topicTmp);
+			const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
+			if (currentHash !== myHash) {
+
+				// catch potential delayed stream reads
+				if (keyPairOtherPub !== undefined) {
+					return;
+				}
+
+				// stop the handshake poller
+				clearInterval(detectStart);
+
+				const handshakeOther = await r.text();
+				const userOther = await connectToPeer(handshakeOther, undefined);
+
+				// share the good news
+				whohoo(userOther);
+			}	
+			attempts++;
+		}, MSGPERIOD);
+	});
+}
+
 // Handle the handshake from the peer that responds to the invitation
-function startRequest() {
+async function startRequest():Promise<string> {
 
 	// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
 	// on success passes user address for peer
-	return new Promise((whohoo, doh) => {
-		uploadToFeed(bz, userTmp, topicTmp, keyPubSelf).then(function(myHash) {
-			console.log("uploaded to " + myHash);
-			publishResponseScript();
-			let attempts = 0;
-			const detectStart = setInterval(function() {
-				console.log("check if started, attempt " + attempts);
-				if (attempts > MAXCONNECTIONPOLLS) {
-					clearInterval(detectStart);
-					doh("timeout waiting for other side to respond");
-				}
-				downloadFromFeed(bz, userTmp, topicTmp).then(function(r) {
-					const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
-					if (currentHash !== myHash) {
-						r.text().then(function(handshakeOther) {
-							// catch potential delayed stream reads
-							if (keyPairOtherPub !== undefined) {
-								return;
-							}
-
-							// stop the handshake poller
-							clearInterval(detectStart);
-
-							// set up the user info for the peer
-							// and start the chat session with that info
-							keyPairOtherPub = createPublic(handshakeOther.substring(0, 130));
-							let secret = handshakeOther.substring(130, 130+64);
-							userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-							chatSession.start(keyPairOtherPub, secret).then(function() {
-								setTimeout(function() {
-									chatSession.stop().then(function() {
-										console.log("stopped");
-									});
-								}, 3000);
-							});
-
-							// share the good news
-							whohoo(userOther);
-						});
-					}	
-				});
-				attempts++;
-			}, MSGPERIOD);
-		}).catch(function(e) {
+	return new Promise(async (whohoo, doh) => {
+		const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
+		console.log("uploaded to " + myHash);
+		publishResponseScript();
+		try {
+			const userOther = await checkResponse(myHash, bz);
+			whohoo(userOther);
+		} catch(e) {
 			doh(e);
-		});
+		}
 	});
 }
 
-function startResponse() {
+async function startResponse():Promise<string> {
+	return new Promise<string>(async (whohoo, doh) => {
+		// TODO: derive proper secret from own privkey
+		const secret = ZEROHASH;
 
-	// TODO: derive proper secret from own privkey
-	const secret = ZEROHASH;
+		// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
+		const signBytes = signerTmp;
+		const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
-	// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
-	const signBytes = signerTmp;
-	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
+		const r = await downloadFromFeed(bz, userTmp, topicTmp);
+		const handshakePubOther = await r.text();
 
-	return new Promise((whohoo, doh) => {
-		downloadFromFeed(bz, userTmp, topicTmp).then(function(r) {
-			r.text().then(function(handshakePubOther) {
-				// NB these are globalsss
-				keyPairOtherPub = createPublic(handshakePubOther);
-				userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-				uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH).then(function(myHash) {
-					chatSession.start(keyPairOtherPub, ZEROHASH).then(function() {
-						setTimeout(function() {
-							chatSession.stop().then(function() {
-								console.log("stopped");
-							});
-						}, 3000);
-					});
-					whohoo(userOther);
-				});
-			}).catch(doh);
-		}).catch(doh);
+		const userOther = await connectToPeer(handshakePubOther, bz);
+		whohoo(userOther);
 	});
 }
 
 if (keyTmpRequestPriv === undefined) {
-	startRequest().then(function(v) {
+	startRequest().then((v) => {
 		console.log("started request: " + v);
-	}).catch(function(e) {
+		// for testing purposes only
+		setTimeout(async () => {
+			await chatSession.stop();
+			console.log("stopped");
+		}, 3000);
+
+	}).catch((e) => {
 		console.error("error starting response: " + e);
 	});
 } else {
-	startResponse().then(function(v) {
+	startResponse().then((v) => {
 		console.log("started request: " + v);
-	}).catch(function(e) {
+		// for testing purposes only
+		setTimeout(async () => {
+			await chatSession.stop();
+			console.log("stopped");
+		}, 3000);
+	}).catch((e) => {
 		console.error("error starting response: " + e);
 	});
 }
+
+
