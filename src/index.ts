@@ -407,9 +407,8 @@ function publishResponseScript() {
 async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
-	const pubHex = handshakeOther.substring(0, 130);
-	keyPairOtherPub = createPublic(pubHex);
-	const pubArray = hexToArray(pubHex);
+	keyPairOtherPub = createPublic(handshakeOther); 
+	const pubArray = hexToArray(handshakeOther);
 	const pubBuffer = Buffer.from(pubArray);
 
 	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
@@ -417,7 +416,7 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
 	await chatSession.start(userOther, secret);
-	return userOther;
+	return userOther;		
 }
 
 async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
