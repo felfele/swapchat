@@ -74,26 +74,6 @@ function createManifestDate(timestamp?:number):string {
 
 // varHash is the hash of the HEADER SCRIPT section above
 // size is the byte size of the contents of the header script
-//
-// To test the manifest is correct, update both feeds with MANIFESTS enclosing the following data:
-//
-// HTMLFEEDTOPIC (index.html):
-//
-//<html>
-//<head>
-//<script language="javascript" src="head.js"></script>
-//<script language="javascript" src="main.js"></script>
-//</head>
-//<body>
-//loaded...
-//</body>
-//</html>
-//
-// SCRIPTFEEDTOPIC (main.js):
-//
-//console.log(keyTmpRequestPriv);
-//
-//
 function createManifest(varHash:string, size:number):string {
 	const dateString = createManifestDate();
 	const dateStringZero = "0001-01-01T00:00:00Z";
