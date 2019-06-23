@@ -1,8 +1,10 @@
-import { getFeedTopic } from '@erebos/api-bzz-base'
+import { getFeedTopic } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
-import { createKeyPair, createPublic, sign } from '@erebos/secp256k1'
-import { pubKeyToAddress, hash } from '@erebos/keccak256'
+import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
+import { pubKeyToAddress, hash } from '@erebos/keccak256';
 
+const ec = require('eccrypto');
+const aesjs = require("aes-js");
 
 /////////////////////////////////
 // HEADER SCRIPT
@@ -72,7 +74,7 @@ class ChatMessage {
 		if (this._payload != "") {
 			o.payload = this._payload
 		}
-		var jsonPayload = JSON.stringify(o);
+		return JSON.stringify(o);
 	}
 }
 
@@ -139,6 +141,10 @@ class ChatSession {
 
 	// starts the retrieve and post loop after we know the user of the other party
 	public async start(userOther: string, secret: string): Promise<any> { 
+		console.log("secret: " + secret);
+//		if (secret.substring(0, 2) === "0x") {
+//			secret = secret.substring(2, secret.length-2);
+//		}
 		this._inCrypt = new ChatCipher(secret);
 		this._outCrypt = this._inCrypt;
 		this._userOther = userOther;
@@ -182,7 +188,8 @@ class ChatSession {
 
 
 // us
-const keyPairSelf = createKeyPair();
+const keyPrivSelf = newPrivateKey();
+const keyPairSelf = createKeyPair(arrayToHex(keyPrivSelf));
 const keyPubSelf = keyPairSelf.getPublic("hex");
 const userSelf = pubKeyToAddress(createHex("0x" + keyPubSelf));
 const signerSelf = async bytes => sign(bytes, keyPairSelf.getPrivate());
@@ -222,7 +229,137 @@ console.log("user other: " + userOther);
 console.log("other's feed: " + chatSession._topicOther);
 
 
-async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
+// crypto stuff
+function newPrivateKey() {
+	return ec.generatePrivate();
+}
+
+function encryptSecret(pubkey, data) {
+	return ec.encrypt(pubkey, Buffer.from(data));
+}
+
+function decryptSecret(privkey, data) {
+	console.log("decrypting" + data);
+	return ec.decrypt(privkey, data);
+}
+
+function serializeEncrypted(e) {
+	var o = {};
+	for (var k in e) {
+		o[k] = e[k].toString("hex");
+		console.log("setting k " + k + " " + o[k]);
+	}
+	return JSON.stringify(o)
+}
+
+function deserializeEncrypted(j) {
+	var o = JSON.parse(j)
+	var e = {};
+	for (var k in o) {
+		e[k] = Buffer.from(o[k], "hex");
+		console.log("getting k " + k + " " + e[k]);
+	}
+	return e;
+}
+
+
+// TODO: switch to CTR but needs renegotiation implemented
+class ChatCipher {
+	_nextSerial: number = 0
+	_aes: any
+
+	// takes hex only for now
+	constructor(secret:string) {
+		const secretArray = createHex("0x" + secret).toBytesArray();
+		//this._aes = new aesjs.ModeOfOperation.ctr(secretArray, new aesjs.Counter(serial));
+		this._aes = new aesjs.ModeOfOperation.ecb(secretArray);
+	}
+
+	// TODO: its uint8array but Array<number> doesn't work, test what does to safely type
+	// returns object:
+	// data: padded data
+	// padLength: amount of bytes added as padding
+	pad = (data:any):any => {
+		const padNeeded = 16 - (data.length % 16);
+
+		// TODO: can assign and guarantee init values to 0?
+		let pad = [];
+		for (var i = 0; i < padNeeded; i++) {
+			pad.push(0x00);
+		}
+
+		console.log("datasize: " + data.length + " pad " + padNeeded);	
+		const buf = new ArrayBuffer(data.length + padNeeded);
+		let newdata = new Uint8Array(buf);
+		newdata.set(data, 0);
+		newdata.set(pad, data.length);
+		console.log("newdata: " + newdata.length);
+		return {
+			data: newdata,
+			padLength: padNeeded,
+		};
+	}
+
+	// assumes utf8 input
+	// serial is currently not used, as ecb mode only needs the secret 
+	// adds a one byte prefix to the payload, which contains the length of the padding
+	// data is padding to multiple of 16 INCLUDING that length byte
+	encrypt = (data:string):string => {
+		let databytes = aesjs.utils.utf8.toBytes(data);
+		let databyteswithpad = new Uint8Array(databytes.length + 1);
+		databyteswithpad.set(databytes, 1);
+		const padresult = this.pad(databyteswithpad);
+		databyteswithpad = padresult.data;
+		databyteswithpad[0] = padresult.padLength & 0xff;
+		const ciphertext = this._aes.encrypt(databyteswithpad);
+		this._nextSerial++;
+
+		// createHex returns strange results here, so manual once again
+		return arrayToHex(ciphertext);
+	}
+
+
+	// expects hex input WITHOUT 0x prefix
+	// gives utf8 output
+	// padding is in bytes (not chars in hex string)
+	// see also: encrypt
+	decrypt = (data:string, serial:number):string => {
+//		if (serial != this._nextSerial) {
+//			return undefined;
+//		}
+		// again createHex doesn't help us
+		//const databuf = createHex(data).toBuffer();
+		let uintdata = hexToArray(data);
+		let plainbytes = this._aes.decrypt(uintdata);
+		const padLength = plainbytes[0];
+		plainbytes = plainbytes.slice(1, plainbytes.length-padLength);
+		return arrayToHex(plainbytes);
+	}
+}
+
+export function hexToArray(data:string):any {
+	let databuf = new ArrayBuffer(data.length / 2);
+	let uintdata = new Uint8Array(databuf);
+	for (var i = 0; i < uintdata.length; i++) {
+		uintdata[i] = parseInt(data.substring(i*2,(i*2)+2), 16);
+	}
+	return uintdata;
+}
+
+export function arrayToHex(data:any):string {
+	let hexout = '';
+	data.forEach(function(n) {
+		let h = n.toString(16);
+		if (h.length == 1) {
+			h = "0" + h;
+		}	
+		hexout += h;
+	});
+	return hexout;
+}
+
+
+function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<any> {
 
 	const feedOptions = {
 		user: user,
