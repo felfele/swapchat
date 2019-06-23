@@ -397,16 +397,40 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
 	keyPairOtherPub = createPublic(handshakeOther.substring(0, 130));
-	let secret = handshakeOther.substring(130, handshakeOther.length);
+	//let secret = handshakeOther.substring(130, handshakeOther.length);
+	const pubHex = handshakeOther.substring(0, 130);
+	keyPairOtherPub = createPublic(pubHex);
 	console.log("payload pub " + handshakeOther.substring(0, 130));
-	console.log("payload sec " + secret);
-	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+	const pubArray = hexToArray(pubHex);
+	console.log("secret pub array: " + pubArray.length + " " + pubArray);
+	const pubBuffer = Buffer.from(pubArray);
+	console.log("secret pub buffer: " + pubBuffer.length + " " + pubBuffer);
 
-	if (bz !== undefined) {
-		const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
-		console.log("uploaded to " + myHash);
-		publishResponseScript();
-	}
+	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	console.log("secret array: " + secretBuffer.length + " " + secretBuffer);
+
+	const secret = arrayToHex(new Uint8Array(secretBuffer));
+	console.log("secret sresponse: " + secret.length + " " + " " + secret);
+	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+	await chatSession.start(keyPairOtherPub, secret);
+	return userOther;
+}
+
+async function connecToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
+	const pubArray = hexToArray(handshakePubOther);
+	console.log("secret pub array: " + pubArray.length + " " + pubArray);
+
+	const pubBuffer = Buffer.from(pubArray);
+	console.log("secret pub buffer: " + pubBuffer.length + " " + pubBuffer);
+
+	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	console.log("secret array: " + secretBuffer.length + " " + secretBuffer);
+
+	const secret = arrayToHex(new Uint8Array(secretBuffer));
+	console.log("secret sresponse: " + secret.length + " " + " " + secret);
+	
+	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
 	await chatSession.start(keyPairOtherPub, secret);
 	return userOther;
 }
@@ -465,13 +489,13 @@ async function startRequest():Promise<string> {
 		await waitUntil(jetzt);
 	}
 	throw("no response");
-
 }
 
 async function startResponse():Promise<string> {
 	// TODO: derive proper secret from own privkey
-	const secret = ZEROHASH;
-	console.log("secret zero: " + secret.length);
+<<<<<<< HEAD
+	//const secret = ZEROHASH;
+	//console.log("secret zero: " + secret.length);
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL, signBytes: signerTmp });
 
@@ -479,8 +503,7 @@ async function startResponse():Promise<string> {
 	const handshakePubOther = await r.text();
 	const keyPairOtherPub = createPublic(handshakePubOther);
 	//const userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-	const userOther = await connectToPeer(handshakePubOther, bz);
-
+	const userOther = await connectToPeerTwo(handshakePubOther, bz);
 	await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
 	return userOther;
 }
