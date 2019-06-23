@@ -53,3 +53,13 @@ console.log(keyTmpRequestPriv);
 ```
 
 Replace the `HTMLFEEDHASH` and `SCRIPTFEEDHASH` constants with the corresponding resulting hashes. Also nodify the `AUTHORUSER` with the user used to update the feeds.
+
+Then run the script and look for `published manifest: <HASH>` in the output.
+
+---
+
+To test the connection logic:
+
+1. run ts-node ./src/index.ts in terminal 1, and while running...
+1. look for `tmp priv: <HASH>` in the output, and copy the hash
+1. run ts-node ./src/index.ts <HASH> in terminal 2
