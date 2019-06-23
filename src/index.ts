@@ -331,35 +331,6 @@ function newPrivateKey() {
 	return ec.generatePrivate();
 }
 
-//function encryptSecret(pubkey, data) {
-//	console.log("encrypting secret" + data);
-//	return ec.encrypt(pubkey, Buffer.from(data));
-//}
-//
-//function decryptSecret(privkey, data) {
-//	console.log("decrypting secret" + data);
-//	return ec.decrypt(privkey, data);
-//}
-//
-//function serializeEncrypted(e) {
-//	var o = {};
-//	for (var k in e) {
-//		o[k] = e[k].toString("hex");
-//		console.log("setting k " + k + " " + o[k]);
-//	}
-//	return JSON.stringify(o)
-//}
-//
-//function deserializeEncrypted(j) {
-//	var o = JSON.parse(j)
-//	var e = {};
-//	for (var k in o) {
-//		e[k] = Buffer.from(o[k], "hex");
-//		console.log("getting k " + k + " " + e[k]);
-//	}
-//	return e;
-//}
-
 
 // TODO: switch to CTR but needs renegotiation implemented
 class ChatCipher {
