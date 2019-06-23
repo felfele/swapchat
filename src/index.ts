@@ -138,15 +138,11 @@ class ChatSession {
 
 	// starts the retrieve and post loop after we know the user of the other party
 	public async start(userOther: string, secret: string): Promise<any> { 
-		let self = this;
-		return new Promise((whohoo, doh) => {
-			self._userOther = userOther;
-			self._topicMe = getFeedTopic({
-				name: self.userToTopic(self._userOther)
-			});
-			self._loop = setInterval(self._run, MSGPERIOD, self);
-			whohoo();
+		this._userOther = userOther;
+		this._topicMe = getFeedTopic({
+			name: this.userToTopic(this._userOther)
 		});
+		this._loop = setInterval(this._run, MSGPERIOD, this);
 	}
 
 	// make sure we have pings sent every period if no other message is in the process of being sent
@@ -231,17 +227,15 @@ async function uploadToFeed(bz: any, user: string, topic: string, data: string):
 		topic: topic,
 	}
 
-	return new Promise<string>(async (whohoo, doh) => {	
-		console.log("uploading " + data);
-		bz.upload(
-			data, 
-		).then(function(h) {
-			console.log("data uploaded to " + h);
-			bz.setFeedContentHash(feedOptions, h).then(function(r) {
-				whohoo(h);
-			}).catch(doh);;
-		}).catch(doh);
-	});
+	console.log("uploading " + data);
+	try {
+		const h = await bz.upload(data);
+		console.log("data uploaded to " + h);
+		const r = await bz.setFeedContentHash(feedOptions, h);
+		return h;
+	} catch(e) {
+		return Promise.reject(e);
+	}
 }
 
 function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
@@ -264,19 +258,17 @@ function publishResponseScript() {
 
 // if bz is supplied, will update tmp feed
 async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
-	return new Promise(async (whohoo, doh) => {	
-		// set up the user info for the peer
-		// and start the chat session with that info
-		keyPairOtherPub = createPublic(handshakeOther.substring(0, 130)); // NB! global!
+	// set up the user info for the peer
+	// and start the chat session with that info
+	keyPairOtherPub = createPublic(handshakeOther.substring(0, 130)); // NB! global!
 
-		let secret = handshakeOther.substring(130, 130+64);
-		userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-		if (bz !== undefined) {
-			await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
-		}
-		await chatSession.start(keyPairOtherPub, secret);
-		whohoo(userOther);
-	});
+	let secret = handshakeOther.substring(130, 130+64);
+	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+	if (bz !== undefined) {
+		await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf + ZEROHASH);
+	}
+	await chatSession.start(keyPairOtherPub, secret);
+	return userOther;
 }
 
 async function checkResponse(myHash:string, bz:any):Promise<string> {
@@ -319,17 +311,19 @@ async function startRequest():Promise<string> {
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
 	// on success passes user address for peer
-	return new Promise(async (whohoo, doh) => {
+	try {
 		const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
 		console.log("uploaded to " + myHash);
 		publishResponseScript();
 		try {
 			const userOther = await checkResponse(myHash, bz);
-			whohoo(userOther);
+			return userOther;
 		} catch(e) {
-			doh(e);
+			return Promise.reject(e);
 		}
-	});
+	} catch(e) {
+		return Promise.reject(e);
+	}
 }
 
 async function startResponse():Promise<string> {
