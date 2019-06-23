@@ -44,6 +44,7 @@ class ChatMessage {
 	_lastHashSelf: string
 	_lastHashOther: string
 	_payload: string = ''
+	_padding: number = 0
 	_end: boolean
 
 	constructor(lastSelf: string, lastOther: string, serial: number) {
@@ -71,7 +72,7 @@ class ChatMessage {
 		if (this._payload != "") {
 			o.payload = this._payload
 		}
-		return JSON.stringify(o);
+		var jsonPayload = JSON.stringify(o);
 	}
 }
 
@@ -95,6 +96,8 @@ class ChatSession {
 	_topicOther: string			// topic (function of own user)
 	_secret: string				// key to encrypt payloads with
 	_loop: any				// interval id for ping loop
+	_outCrypt:any				// output symmetric crypter
+	_inCrypt:any				// output symmetric crypter
 
 	constructor(url: string, userMe: string, signer: any) {
 		this._bzz = new BzzAPI({ url: url, signer });
@@ -136,6 +139,8 @@ class ChatSession {
 
 	// starts the retrieve and post loop after we know the user of the other party
 	public async start(userOther: string, secret: string): Promise<any> { 
+		this._inCrypt = new ChatCipher(secret);
+		this._outCrypt = this._inCrypt;
 		this._userOther = userOther;
 		this._topicMe = getFeedTopic({
 			name: this.userToTopic(this._userOther)

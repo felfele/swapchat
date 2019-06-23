@@ -57,19 +57,11 @@ class ChatCipher {
 		//this._aes = new aesjs.ModeOfOperation.ctr(secretArray, new aesjs.Counter(serial));
 		this._aes = new aesjs.ModeOfOperation.ecb(secretArray);
 	}
-	// assumes utf8 input
-	encrypt = (data:string, serial:number):string => {
-		if (serial != this._nextSerial) {
-			return undefined;
-		}
-		let databytes = aesjs.utils.utf8.toBytes(data);
-		databytes = this.pad(databytes);
-		const ciphertext = this._aes.encrypt(databytes);
-		this._nextSerial++;
-		return ciphertext
-	}
 
 	// TODO: its uint8array but Array<number> doesn't work, test what does to safely type
+	// returns object:
+	// data: padded data
+	// padLength: amount of bytes added as padding
 	pad = (data:any):any => {
 		const padNeeded = 16 - (data.length % 16);
 
@@ -85,27 +77,82 @@ class ChatCipher {
 		newdata.set(data, 0);
 		newdata.set(pad, data.length);
 		console.log("newdata: " + newdata.length);
-		return newdata;
+		return {
+			data: newdata,
+			padLength: padNeeded,
+		};
 	}
 
+	// assumes utf8 input
+	// serial is currently not used, as ecb mode only needs the secret 
+	encrypt = (data:string):string => {
+		let databytes = aesjs.utils.utf8.toBytes(data);
+		let databyteswithpad = new Uint8Array(databytes.length + 1);
+		databyteswithpad.set(databytes, 1);
+		const padresult = this.pad(databyteswithpad);
+		console.log("databytes: " + databyteswithpad);
+		databyteswithpad = padresult.data;
+		console.log("databytes: " + databyteswithpad);
+		databyteswithpad[0] = padresult.padLength & 0xff;
+		console.log("databytes: " + databyteswithpad);
+		const ciphertext = this._aes.encrypt(databyteswithpad);
+		this._nextSerial++;
+
+		// createHex returns strange results here, so manual once again
+		return uint8ToHex(ciphertext);
+	}
+
+
+	// expects hex input WITHOUT 0x prefix
 	// gives utf8 output
+	// padding is in bytes (not chars in hex string)
 	decrypt = (data:string, serial:number):string => {
-		return data
+//		if (serial != this._nextSerial) {
+//			return undefined;
+//		}
+		// again createHex doesn't help us
+		//const databuf = createHex(data).toBuffer();
+		console.log("before decode: "  + data);
+		let uintdata = hexToUint8(data);
+		let plainbytes = this._aes.decrypt(uintdata);
+		const padLength = plainbytes[0];
+		plainbytes = plainbytes.slice(1, plainbytes.length-padLength);
+		return uint8ToHex(plainbytes);
 	}
 }
 
-var data = "abcæøå";
+function hexToUint8(data:string):any {
+	let databuf = new ArrayBuffer(data.length / 2);
+	let uintdata = new Uint8Array(databuf);
+	for (var i = 0; i < uintdata.length; i++) {
+		uintdata[i] = parseInt(data.substring(i*2,(i*2)+2), 16);
+	}
+	return uintdata;
+}
+
+function uint8ToHex(data:any):string {
+	let hexout = '';
+	data.forEach(function(n) {
+		let h = n.toString(16);
+		if (h.length == 1) {
+			h = "0" + h;
+		}	
+		hexout += h;
+	});
+	return hexout;
+}
+
+//var data = "abcæøå";
+var data = "foo";
 var secret = "c9d709ffaae7632f2c243271702a1dad461abb2055e9ba7dd9d46b3a17949dfe";
-var c = new ChatCipher(secret);
+const c = new ChatCipher(secret);
+//console.log(data);
+const cipher = c.encrypt(data);
+console.log(cipher);
+// add padding to decrypt
+const plain = c.decrypt(cipher, 0);
+console.log(plain);
 
-for (var i = 0; i < 5; i++) {
-	console.log(c.encrypt(data, i));
-}
-
-var c = new ChatCipher(secret);
-for (var i = 0; i < 5; i++) {
-	console.log(c.encrypt(data, i));
-}
 //
 //var secretArray = createHex("0x" + secret).toBytesArray();
 //var aes = new aesjs.ModeOfOperation.ctr(secretArray);
