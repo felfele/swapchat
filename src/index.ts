@@ -333,20 +333,18 @@ async function startRequest():Promise<string> {
 }
 
 async function startResponse():Promise<string> {
-	return new Promise<string>(async (whohoo, doh) => {
-		// TODO: derive proper secret from own privkey
-		const secret = ZEROHASH;
+	// TODO: derive proper secret from own privkey
+	const secret = ZEROHASH;
 
-		// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
-		const signBytes = signerTmp;
-		const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
+	// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
+	const signBytes = signerTmp;
+	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
-		const r = await downloadFromFeed(bz, userTmp, topicTmp);
-		const handshakePubOther = await r.text();
+	const r = await downloadFromFeed(bz, userTmp, topicTmp);
+	const handshakePubOther = await r.text();
 
-		const userOther = await connectToPeer(handshakePubOther, bz);
-		whohoo(userOther);
-	});
+	const userOther = await connectToPeer(handshakePubOther, bz);
+	return userOther;
 }
 
 if (keyTmpRequestPriv === undefined) {
