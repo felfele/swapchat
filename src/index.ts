@@ -228,14 +228,10 @@ async function uploadToFeed(bz: any, user: string, topic: string, data: string):
 	}
 
 	console.log("uploading " + data);
-	try {
-		const h = await bz.upload(data);
-		console.log("data uploaded to " + h);
-		const r = await bz.setFeedContentHash(feedOptions, h);
-		return h;
-	} catch(e) {
-		return Promise.reject(e);
-	}
+	const h = await bz.upload(data);
+	console.log("data uploaded to " + h);
+	const r = await bz.setFeedContentHash(feedOptions, h);
+	return h;
 }
 
 function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
@@ -311,19 +307,11 @@ async function startRequest():Promise<string> {
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
 
 	// on success passes user address for peer
-	try {
-		const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
-		console.log("uploaded to " + myHash);
-		publishResponseScript();
-		try {
-			const userOther = await checkResponse(myHash, bz);
-			return userOther;
-		} catch(e) {
-			return Promise.reject(e);
-		}
-	} catch(e) {
-		return Promise.reject(e);
-	}
+	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
+	console.log("uploaded to " + myHash);
+	publishResponseScript();
+	const userOther = await checkResponse(myHash, bz);
+	return userOther;
 }
 
 async function startResponse():Promise<string> {
