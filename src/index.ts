@@ -294,9 +294,8 @@ async function checkResponse(myHash:string, bz:any, attempts:number):Promise<str
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest():Promise<string> {
 
-	// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
 	const signBytes = signerTmp;
-	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
+	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
 	// on success passes user address for peer
 	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
@@ -310,9 +309,8 @@ async function startResponse():Promise<string> {
 	// TODO: derive proper secret from own privkey
 	const secret = ZEROHASH;
 
-	// BUG: why does signBytes have to be named "signBytes"? seems like scoping error below
 	const signBytes = signerTmp;
-	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes });
+	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
 	const r = await downloadFromFeed(bz, userTmp, topicTmp);
 	const handshakePubOther = await r.text();
