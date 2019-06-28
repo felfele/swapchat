@@ -268,10 +268,6 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 }
 
 async function checkResponse(myHash:string, bz:any, attempts:number):Promise<string> {
-	if (attempts > MAXCONNECTIONPOLLS) {
-		throw "timeout waiting for other side to respond";
-	}
-	console.log("check if started, attempt " + attempts);
 	const r = await downloadFromFeed(bz, userTmp, topicTmp);
 	const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
 	if (currentHash !== myHash) {
@@ -287,13 +283,30 @@ async function checkResponse(myHash:string, bz:any, attempts:number):Promise<str
 		// share the good news
 		return userOther;
 	}	
-	attempts++;
-	setTimeout(checkResponse, MSGPERIOD, myHash, bz, attempts)
+}
+
+// stolen from https://github.com/felfele/felfele/src/Utils.ts
+async function waitMillisec(ms: number): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+	if (ms > 0) {
+	    setTimeout(() => resolve(ms), ms);
+	}
+    });
+}
+
+// stolen from https://github.com/felfele/felfele/src/Utils.ts
+async function waitUntil(untilTimestamp: number, now: number = Date.now()): Promise<number> {
+    const diff = untilTimestamp - now;
+    if (diff > 0) {
+	return waitMillisec(diff);
+    }
+    return 0;
 }
 
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest():Promise<string> {
 
+	let userOther = undefined;
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
@@ -301,8 +314,16 @@ async function startRequest():Promise<string> {
 	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
 	console.log("uploaded to " + myHash);
 	publishResponseScript();
-	const userOther = await checkResponse(myHash, bz, 0);
-	return userOther;
+	for (let i = 0; i < MAXCONNECTIONPOLLS; i++) {
+		console.log("check if started, attempt " + i);
+		const jetzt = Date.now() + 1000;
+		userOther = await checkResponse(myHash, bz, 0);
+		if (userOther !== undefined) {	
+			return userOther;
+		}
+		await waitUntil(jetzt);
+	}
+	throw("no response");
 }
 
 async function startResponse():Promise<string> {
