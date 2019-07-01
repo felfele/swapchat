@@ -11,3 +11,9 @@ Build the Javascript bundle
 ```
 
 Now you can open `dist/index.html` in the browser.
+
+Or you can run it from the command
+
+```
+ $ npm start
+```
