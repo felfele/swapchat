@@ -232,10 +232,11 @@ class ChatSession {
 
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
-	public sendMessage = (msg: ChatMessage) => {
+	public sendMessage = async (msg: ChatMessage) => {
 		const payload = this._outCrypt.encrypt(msg.toString());
+		let h = '';
 		try {
-			const h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload); 
+			h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload); 
 		} catch(e) {
 			this._ready = true;
 			throw "error uploading feed: " + e
@@ -429,7 +430,7 @@ export function arrayToHex(data:any):string {
 }
 
 
-function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<any> {
+async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
 
 	const feedOptions = {
 		user: user,
@@ -475,17 +476,17 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 
 async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	// NB these are globalsss
-	keyPairOtherPub = createPublic(handshakePubOther);
-	const pubArray = hexToArray(handshakePubOther);
+	keyPairOtherPub = createPublic(handshakeOther);
+	const pubArray = hexToArray(handshakeOther);
 	const pubBuffer = Buffer.from(pubArray);
 
 	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 		
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-	const myHash = uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
-	await chatSession.start(userOther, secret).then(function() {
-	return userOther;	
+	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
+	await chatSession.start(userOther, secret);
+	return userOther;
 }
 
 async function checkResponse(myHash:string, bz:any, attempts:number):Promise<string> {
