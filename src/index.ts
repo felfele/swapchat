@@ -465,8 +465,10 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 	keyPairOtherPub = createPublic(handshakeOther); 
 	const pubArray = hexToArray(handshakeOther);
 	const pubBuffer = Buffer.from(pubArray);
-
-	const secretBuffer = ec.derive(keyPrivSelf, pubBuffer);
+	console.log(pubArray);
+	console.log(handshakeOther);
+	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	console.log(pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
