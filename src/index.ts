@@ -2,6 +2,7 @@ import { getFeedTopic } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
+import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings.js';
 
 const ec = require('eccrypto');
 const aesjs = require("aes-js");
@@ -36,7 +37,7 @@ const VERSION = 1;
 const GATEWAY_URL = 'http://localhost:8500';
 const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
-const MAXCONNECTIONPOLLS = 3;
+const MAXCONNECTIONPOLLS = 7;
 const AUTHORUSER = "beefc6472de3bba1d389ad8b18348c3df50d680c"; 
 const SCRIPTFEEDTOPIC = "646973706f636861745f73637269707400000000000000000000000000000000"; // name = dispochat_script
 const SCRIPTFEEDHASH = "c8b0051d921ae84f1676a24eaa7d509302dfbd9902dea17fbebe9e004a4a119b"; 
@@ -119,7 +120,7 @@ function createManifest(varHash:string, size:number):string {
 // TODO: generate webpage on swarm. we only need to post the header script, then fake a manifest which links the application html and main script
 function publishResponseScript(bz:any, tmpPrivKey:string):Promise<string> {
 	return new Promise((whohoo,doh) => {
-		const headScript = "let keyTmpRequestPriv = '" + tmpPrivKey + "';\n";
+		const headScript = "let keyTmpRequestPriv = '" + tmpPrivKey + "';\nlet keyPubOther = '" + keyPubSelf + "';\n";
 		bz.upload(
 			headScript,
 		).then((h) => {
@@ -147,7 +148,7 @@ class ChatMessage {
 	_padding: number = 0
 	_end: boolean
 
-	constructor(lastSelf: string, lastOther: string, serial: number) {
+	constructor(lastSelf?: string, lastOther?: string, serial?: number) {
 		this._lastHashSelf = lastSelf;
 		this._lastHashOther = lastOther;
 		this._serial = serial;
@@ -156,9 +157,17 @@ class ChatMessage {
 	public addPayload = (payload: string) => {
 		this._payload += payload;
 	}
+
+	public payload = ():string => {
+		return this._payload;
+	}
 	
 	public setEnd = () => {
 		this._end = true;
+	}
+
+	public hasEnd = () => {
+		return this._end === true;
 	}
 
 	public toString = (): string => {
@@ -173,6 +182,16 @@ class ChatMessage {
 			o.payload = this._payload
 		}
 		return JSON.stringify(o);
+	}
+
+	public fromString = (s:string) => {
+		let o = JSON.parse(s);
+		console.log(o);
+		this._lastHashSelf = o.lastSelf;
+		this._lastHashOther = o.lastOther;
+		this._serial = o.serial;
+		this._payload = o.payload;
+		this._end = o.end;
 	}
 }
 
@@ -198,8 +217,9 @@ class ChatSession {
 	_loop: any				// interval id for ping loop
 	_outCrypt:any				// output symmetric crypter
 	_inCrypt:any				// output symmetric crypter
+	_messageCallback:any
 
-	constructor(url: string, userMe: string, signer: any) {
+	constructor(url: string, userMe: string, signer: any, messageCallback: any) {
 		const signBytes = signer;
 		this._bzz = new BzzAPI({ url: url, signBytes });
 		this._userMe = userMe;
@@ -207,6 +227,7 @@ class ChatSession {
 			name: this.userToTopic(this._userMe)
 		});
 		this._ready = true;
+		this._messageCallback = messageCallback;
 	}
 
 	public userToTopic = (user: string): string => {
@@ -233,7 +254,9 @@ class ChatSession {
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
 	public sendMessage = async (msg: ChatMessage) => {
-		const payload = this._outCrypt.encrypt(msg.toString());
+		console.log("sending: " + msg.toString());
+		//const payload = this._outCrypt.encrypt(msg.toString());
+		const payload = msg.toString();
 		let h = '';
 		try {
 			h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload); 
@@ -242,7 +265,7 @@ class ChatSession {
 			throw "error uploading feed: " + e
 		}
 		this._lastAt = Date.now();
-		console.log("uploaded to " + h);
+		console.log("sent message uploaded to " + h);
 		this._lastHashSelf = h;
 		this._ready = true;
 		
@@ -260,15 +283,41 @@ class ChatSession {
 		this._topicMe = getFeedTopic({
 			name: this.userToTopic(this._userOther)
 		});
-		this._loop = setInterval(this._run, MSGPERIOD, this);
+		this.ping();
+		this.poll();
 	}
 
 	// make sure we have pings sent every period if no other message is in the process of being sent
-	_run = (self: any) => {
-		if (self._ready && Date.now() - self._lastAt > MSGPERIOD) {
-			let msg = self.newMessage();
-			self.sendMessage(msg);
+	private ping = () => {
+		if (this._ready && Date.now() - this._lastAt > MSGPERIOD) {
+			let msg = this.newMessage();
+			this.sendMessage(msg);
 		}
+		setTimeout(this.ping, MSGPERIOD);
+	}
+
+
+	private async poll() {
+		let currentHash = "";
+		while (currentHash != this._lastHashOther) {
+			try {
+				let r = await downloadFromFeed(this._bzz, this._userOther, this._topicOther);
+				let t = await r.text();
+				//let p = this._inCrypt.decrypt(t);
+				let p = t;
+				let msg = new ChatMessage();
+				msg.fromString(p);
+				this._messageCallback(msg);
+				if (msg.hasEnd()) {
+					console.log("caught end, terminating");
+					this.stop();
+				}
+			} catch(e) {
+				console.error(e);	
+			}
+
+		}
+		setTimeout(this.poll, MSGPERIOD);
 	}
 
 	// teardown of chat session
@@ -325,7 +374,10 @@ let userOther = undefined;
 
 
 // set up the session object
-const chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf); 
+function logMessage(msg:ChatMessage) {
+	console.log("got message: " + msg.payload());
+}
+const chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf, logMessage);
 
 // crypto stuff
 function newPrivateKey() {
@@ -375,6 +427,7 @@ class ChatCipher {
 	// serial is currently not used, as ecb mode only needs the secret 
 	// adds a one byte prefix to the payload, which contains the length of the padding
 	// data is padding to multiple of 16 INCLUDING that length byte
+	//encrypt = (data:string):string => {
 	encrypt = (data:string):string => {
 		let databytes = aesjs.utils.utf8.toBytes(data);
 		let databyteswithpad = new Uint8Array(databytes.length + 1);
@@ -387,6 +440,7 @@ class ChatCipher {
 
 		// createHex returns strange results here, so manual once again
 		return arrayToHex(ciphertext);
+		return ciphertext;
 	}
 
 
@@ -399,7 +453,7 @@ class ChatCipher {
 //			return undefined;
 //		}
 		// again createHex doesn't help us
-		//const databuf = createHex(data).toBuffer();
+		const databuf = createHex(data).toBuffer();
 		let uintdata = hexToArray(data);
 		let plainbytes = this._aes.decrypt(uintdata);
 		const padLength = plainbytes[0];
@@ -430,7 +484,8 @@ export function arrayToHex(data:any):string {
 }
 
 
-async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
+//async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
+async function uploadToFeed(bz: any, user: string, topic: string, data: Uint8Array|string): Promise<string> {
 
 	const feedOptions = {
 		user: user,
@@ -438,7 +493,12 @@ async function uploadToFeed(bz: any, user: string, topic: string, data: string):
 	}
 
 	console.log("uploading " + data);
-	const h = await bz.upload(data);
+	let h = "";
+	if (typeof data === 'string') {
+		h = await bz.upload(data);
+	} else {
+		h = await bz.upload(Buffer.from(data));
+	}
 	console.log("data uploaded to " + h);
 	const r = await bz.setFeedContentHash(feedOptions, h);
 	console.log("set feed: " + user + "/" + topic + ": " +  h);
@@ -455,8 +515,6 @@ function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
 		mode: "raw",
 	});
 }
-
-
 
 // if bz is supplied, will update tmp feed
 async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
@@ -517,9 +575,7 @@ async function waitMillisec(ms: number): Promise<number> {
 }
 
 // stolen from https://github.com/felfele/felfele/src/Utils.ts
-async function waitUntil(untilTimestamp: number, now: number = Date.now()): Promise<number> {
-    const diff = untilTimestamp - now;
-    if (diff > 0) {
+async function waitUntil(untilTimestamp: number, now: number = Date.now()): Promise<number> { const diff = untilTimestamp - now; if (diff > 0) {
 	return waitMillisec(diff);
     }
     return 0;
