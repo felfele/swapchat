@@ -1,1 +1,343 @@
-<body><html><script src="index.js"></script></html></body>
+<html>
+    <head>
+        <script src="index.js"></script>
+        <script>
+
+            var mode = "link"; // or "chat"
+
+            function changeMode() {
+                if (mode === "link") {
+                    mode = "chat";
+                    chat("flex");
+                    link("none");
+                } else {
+                    mode = "link";
+                    chat("none");
+                    link("flex");
+                }
+            }
+
+            function chat(mode) {
+                var chat = document.getElementById("chat");
+                chat.style.display = mode;
+            }
+
+            function link(mode) {
+                var link = document.getElementById("link");
+                link.style.display = mode;
+            }
+
+            function copyToClipboard() {
+                var input = document.getElementById("linkInput");
+                var range = document.createRange();
+                input.contentEditable = true;
+                input.readOnly = false;
+                range.selectNodeContents(input);
+                var s = window.getSelection();
+                s.removeAllRanges();
+                s.addRange(range);
+                input.setSelectionRange(0, 999999); // A big number, to cover anything that could be inside the element.
+                input.readOnly = true;
+                var ret = document.execCommand("copy");
+                console.log(ret);
+            }
+
+            function addToHistory(innerHTML) {
+                var history = document.getElementById('history');
+                if (history) {
+                    history.innerHTML += innerHTML;
+                    history.scrollTop = history.scrollHeight;
+                }
+            }
+
+            function addMessageToHistory(message, mine) {
+                let liClass = 'entry';
+                let pClass = 'message';
+                if (mine) {
+                    liClass += ' mine';
+                    pClass += ' mine';
+                } else {
+                    liClass += ' your';
+                    pClass += ' your';
+                }
+                const innerHTML = `<li class="${liClass}"><p class="${pClass}">` + message + '</p></li>';
+                addToHistory(innerHTML);
+            }
+
+            function sendMessage() {
+                var chatInput = document.getElementById("chatinput");
+                console.log(chatInput);
+                var text = chatInput.value;
+                addMessageToHistory(text, Math.floor(Math.random() + 0.5) === 1);
+                chatInput.value = '';
+            }
+
+            function submitOnEnter(event) {
+                if (event.which === 13 && !event.shiftKey) {
+                    sendMessage();
+                }
+            }
+
+            function onLoad() {
+                document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
+            }
+        </script>
+        <style>
+
+html, body, .container {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+.debug {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 6vw;
+    height: 6vw;
+}
+
+.container {
+    display: -webkit-flexbox;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    display: none;
+    -webkit-flex-align: center;
+    -ms-flex-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    flex-direction: column;
+}
+
+.inputContainer {
+    width: 100%;
+    display: -webkit-flexbox;
+    display: -ms-flexbox;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-align: center;
+    -ms-flex-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    justify-content: center;
+    flex-direction: row;
+}
+
+.link {
+    font-size: large;
+    width: 80%;
+}
+
+.copyButton {
+    font-size: 20;
+}
+
+.loader {
+  border: 16px solid #f3f3f3; /* Light grey */
+  border-top: 16px solid #3498db; /* Blue */
+  border-radius: 50%;
+  width: 60px;
+  height: 60px;
+  animation: spin 2s linear infinite;
+  margin-top: 20;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.chat {
+    /* display: none; */
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+}
+
+p.message {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    padding: 1vmax;
+    background-color: #ddd;
+    border-radius: 1vmax;
+    max-width: 70%;
+    margin: 0.2vmax;
+}
+p.message.your {
+    border-bottom-left-radius: 0px;
+}
+p.message.mine {
+    background-color: #006DF0;
+    color: #fff;
+    border-bottom-right-radius: 0px;
+}
+p.status {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    padding: 0.3vmax;
+    max-width: 70%;
+    font-size: 90%;
+    color: lightgrey;
+}
+.entry {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    max-width: 100%;
+}
+.entry.mine {
+    flex-direction: row-reverse;
+}
+ul.history {
+    list-style: none;
+    max-width: 100%;
+    width: 100%;
+    transition: all 0.444s cubic-bezier(0.7, 0, 0.3, 1);
+    overflow-y: scroll;
+    overflow-x: hidden;
+    padding: 0;
+    margin: 0;
+    padding-bottom: 10;
+    background-color: white;
+    flex: 1;
+}
+.history {
+    margin: 0 auto;
+}
+#head {
+    width: 100%;
+    transition: all 0.333s ease-in-out;
+    font-size: 100%;
+}
+.style-bg {
+    height: 6vmax;
+    background: #006DF0;
+    color: white;
+    overflow:hidden;
+}
+#chatname {
+    margin-top: 1.5vmax;
+    margin-left: 40%;
+    height: 6vmax;
+}
+.back {
+    min-width: 3vmax;
+    min-height: 3vmax;
+    width: 3vmax;
+    height: 3vmax;
+    cursor: pointer;
+    margin-top: 1.5vmax;
+}
+.next {
+    min-width: 1.5vmax;
+    min-height: 1.5vmax;
+    width: 1.5vmax;
+    height: 1.5vmax;
+    cursor: pointer;
+    margin-left: 0.5vmax;
+    margin-top: 2vmax;
+}
+#loginform input {
+    float: left;
+    width: 80%;
+    height: 6vmax;
+    margin-left: 10%;
+    margin-top: 1vmax;
+    padding: 2vmax 1vmax;
+    color: #1a1a1a;
+    border: 0;
+    outline: none;
+    background-color: lightgrey;
+}
+#loginform input.login {
+    background-color: #006DF0;
+    color: white;
+}
+.write input {
+    float: left;
+    width: 80%;
+    height: 6vmax;
+    margin-top: 1vmax;
+    padding: 2vmax 0.5vmax;
+    color: #1a1a1a;
+    border: 0;
+    outline: none;
+    font-size: 20;
+}
+input.nostyle {
+    border: 0;
+    width: 90%;
+    padding: 12px 0 12px 0;
+    background: transparent;
+}
+.write {
+    bottom: 0px;
+    width: 100%;
+    height: 8vmax;
+    border-top: thin solid lightgrey;
+}
+.sendcontainer {
+    position: relative;
+    float: right;
+    width: 6vmax;
+    height: 100%;
+    margin-top: 2vmax;
+}
+.send {
+    width: 4vmax;
+    height: 4vmax;
+    cursor: pointer;
+    display:table-cell;
+    vertical-align:middle;
+}
+
+        </style>
+    </head>
+    <body onload="onLoad()">
+        <div id="debug" class="debug" onclick="changeMode()">
+            X
+        </div>
+
+        <div id="link" class="container">
+            <div class="inputContainer">
+                <input
+                    id="linkInput"
+                    type="text"
+                    value="http://localhost:8500/bzz/cd460b3e71b6f9aa32d0e8a07bda87237b0bcb5ef1457469fd6179955d5205f1"
+                    class="link"
+                    readonly
+                />
+                <button class="copyButton" onclick="copyToClipboard()">Copy</button>
+            </div>
+            <div id="loader" class="loader"></div>
+        </div>
+
+        <div id="chat" class="chat">
+            <div id="head" class="status-bar style-bg">
+            </div>
+
+            <ul class="history" id="history"></ul>
+
+            <div class="write">
+                <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
+                <div class="sendcontainer">
+                    <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
