@@ -377,7 +377,7 @@ let userOther = undefined;
 function logMessage(msg:ChatMessage) {
 	console.log("got message: " + msg.payload());
 }
-const chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf, logMessage);
+export let chatSession = undefined;
 
 // crypto stuff
 function newPrivateKey() {
@@ -619,38 +619,21 @@ async function startResponse():Promise<string> {
 	return userOther;
 }
 
-
-// debug out central params
-console.log("started: " + chatSession.getStarted());
-console.log("topic: " + topicTmp);
-console.log("user self: " + userSelf);
-console.log("tmp priv: " + keyPairTmp.getPrivate("hex"));
-console.log("pub self: " + keyPairSelf.getPublic("hex"));
-console.log("user other: " + userOther);
-console.log("other's feed: " + chatSession._topicOther);
-
-
-if (keyTmpRequestPriv === undefined) {
-	startRequest().then((v) => {
-		console.log("started request: " + v);
-		// for testing purposes only
-		setTimeout(async () => {
-			await chatSession.stop();
-			console.log("stopped");
-		}, 3000);
-
-	}).catch((e) => {
-		console.error("error starting response: " + e);
-	});
-} else {
-	startResponse().then((v) => {
-		console.log("started request: " + v);
-		// for testing purposes only
-		setTimeout(async () => {
-			await chatSession.stop();
-			console.log("stopped");
-		}, 3000);
-	}).catch((e) => {
-		console.error("error starting response: " + e);
-	});
+function init(messageCallback:any, stateCallback:any) {
+	chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf, messageCallback);
+	if (keyTmpRequestPriv === undefined) {
+		startRequest().then((v) => {
+			stateCallback();	
+		}).catch((e) => {
+			console.error("error starting response: " + e);
+		});
+	} else {
+		startResponse().then((v) => {
+			stateCallback();	
+		}).catch((e) => {
+			console.error("error starting response: " + e);
+		});
+	}
 }
+
+init(logMessage, () => {});
