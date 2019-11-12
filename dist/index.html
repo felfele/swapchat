@@ -4,7 +4,6 @@
         <script>
 
             var mode = "link"; // or "chat"
-
             function changeMode() {
                 if (mode === "link") {
                     mode = "chat";
@@ -72,6 +71,14 @@
                 chatInput.value = '';
             }
 
+            function setManifest(manifest) {
+                var linkInput = document.getElementById("linkInput");
+                var manifestLink = "http://localhost:8500/bzz:/" + manifest;
+                linkInput.value = manifestLink;
+                var copyButton = document.getElementById("copyButton");
+                copyButton.disabled = false;
+            }
+
             function submitOnEnter(event) {
                 if (event.which === 13 && !event.shiftKey) {
                     sendMessage();
@@ -80,6 +87,15 @@
 
             function onLoad() {
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
+                init(function(msg) {
+                    console.log('messageCallback', msg);
+                }, function(manifest) {
+                    setManifest(manifest);
+                },
+                function() {
+                    console.log('stateCallback');
+                    changeMode();
+                });
             }
         </script>
         <style>
@@ -106,7 +122,6 @@ html, body, .container {
     display: -ms-flexbox;
     display: -webkit-flex;
     display: flex;
-    display: none;
     -webkit-flex-align: center;
     -ms-flex-align: center;
     -webkit-align-items: center;
@@ -155,13 +170,12 @@ html, body, .container {
 }
 
 .chat {
-    /* display: none; */
     overflow: hidden;
     height: 100%;
     width: 100%;
     margin: 0;
     padding: 0;
-    display: flex;
+    display: none;
     flex-direction: column;
     justify-content: stretch;
 }
@@ -317,11 +331,11 @@ input.nostyle {
                 <input
                     id="linkInput"
                     type="text"
-                    value="http://localhost:8500/bzz/cd460b3e71b6f9aa32d0e8a07bda87237b0bcb5ef1457469fd6179955d5205f1"
+                    value="Waiting for manifest..."
                     class="link"
                     readonly
                 />
-                <button class="copyButton" onclick="copyToClipboard()">Copy</button>
+                <button id="copyButton" class="copyButton" onclick="copyToClipboard()" disabled>Copy</button>
             </div>
             <div id="loader" class="loader"></div>
         </div>

@@ -2,7 +2,7 @@ import { getFeedTopic } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
-import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings.js';
+import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings';
 
 const ec = require('eccrypto');
 const aesjs = require("aes-js");
@@ -14,13 +14,13 @@ const aesjs = require("aes-js");
 // these two values should be filled in by chat requester when starting a new chat
 // if they are empty, the code should initiate a new chat
 let keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
-
+let debugLog = console.log;
 
 // OMIT FOR BROWSER COMPILE
 // dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
 if (process.argv.length > 2) {
 	keyTmpRequestPriv = process.argv[2];
-	console.log("using tmpkey from cli: " + keyTmpRequestPriv);
+	debugLog("using tmpkey from cli: " + keyTmpRequestPriv);
 }
 // END OMIT FOR BROWSER COMPILE
 // END SEPARATE SCRIPT
@@ -32,18 +32,11 @@ if (process.argv.length > 2) {
 /////////////////////////////////
 //
 // everything below here must be immutable and usable for both requester and responder
-// the compiled version of it will be used in the script generation for the responser 
-const VERSION = 1;
+// the compiled version of it will be used in the script generation for the responser
 const GATEWAY_URL = 'http://localhost:8500';
 const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
 const MAXCONNECTIONPOLLS = 7;
-const AUTHORUSER = "beefc6472de3bba1d389ad8b18348c3df50d680c"; 
-const SCRIPTFEEDTOPIC = "646973706f636861745f73637269707400000000000000000000000000000000"; // name = dispochat_script
-const SCRIPTFEEDHASH = "c8b0051d921ae84f1676a24eaa7d509302dfbd9902dea17fbebe9e004a4a119b"; 
-const HTMLFEEDTOPIC = "646973706f636861745f68746d6c000000000000000000000000000000000000"; // name = dispochat_main, topic 
-const HTMLFEEDHASH = "4dce80c0210b318db31094a1e7c694179b24ac22b56f25d44582800f0ca07706";
-const FEEDMIME = 'application/bzz-feed';
 
 // creates a date string in format 0000-00-00T00:00:00+00:00
 function createManifestDate(timestamp?:number):string {
@@ -85,7 +78,7 @@ function createManifest(varHash:string, size:number):string {
 			contentType: 'application/json',
 			mode: 420,
 			size: size,
-			mod_time: dateString,	
+			mod_time: dateString,
 		},
 		{
 			path: "main.js",
@@ -114,13 +107,13 @@ function createManifest(varHash:string, size:number):string {
 			}
 		}
 	]};
-	return JSON.stringify(o);	
+	return JSON.stringify(o);
 }
 
 // TODO: generate webpage on swarm. we only need to post the header script, then fake a manifest which links the application html and main script
-function publishResponseScript(bz:any, tmpPrivKey:string):Promise<string> {
+function publishResponseScript(bz:any, tmpPrivKey:string, manifestCallback: (manifest: string) => void):Promise<string> {
 	return new Promise((whohoo,doh) => {
-		const headScript = "let keyTmpRequestPriv = '" + tmpPrivKey + "';\nlet keyPubOther = '" + keyPubSelf + "';\n";
+		const headScript = "let keyTmpRequestPriv = '" + tmpPrivKey + "';\nlet keyPubOther = '" + publicKeySelf + "';\n";
 		bz.upload(
 			headScript,
 		).then((h) => {
@@ -128,12 +121,13 @@ function publishResponseScript(bz:any, tmpPrivKey:string):Promise<string> {
 			bz.upload(
 				manifest,
 			).then((h) => {
-				console.log("published manifest: " + h);
+				debugLog("published manifest: " + h);
+				manifestCallback(h);
 				whohoo(h);
 			}).catch(doh);
-		}).catch(doh);	
+		}).catch(doh);
 		let keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
-		console.log("TODO: upload code to swarm for responder");
+		debugLog("TODO: upload code to swarm for responder");
 	});
 }
 
@@ -161,7 +155,7 @@ class ChatMessage {
 	public payload = ():string => {
 		return this._payload;
 	}
-	
+
 	public setEnd = () => {
 		this._end = true;
 	}
@@ -186,7 +180,7 @@ class ChatMessage {
 
 	public fromString = (s:string) => {
 		let o = JSON.parse(s);
-		console.log(o);
+		debugLog(o);
 		this._lastHashSelf = o.lastSelf;
 		this._lastHashOther = o.lastOther;
 		this._serial = o.serial;
@@ -231,7 +225,7 @@ class ChatSession {
 	}
 
 	public userToTopic = (user: string): string => {
-		return createHex(user).toBuffer();
+		return createHex(user).toString();
 	}
 
 	public getStarted = (): number => {
@@ -254,26 +248,26 @@ class ChatSession {
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
 	public sendMessage = async (msg: ChatMessage) => {
-		console.log("sending: " + msg.toString());
+		debugLog("sending: " + msg.toString());
 		//const payload = this._outCrypt.encrypt(msg.toString());
 		const payload = msg.toString();
 		let h = '';
 		try {
-			h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload); 
+			h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload);
 		} catch(e) {
 			this._ready = true;
 			throw "error uploading feed: " + e
 		}
 		this._lastAt = Date.now();
-		console.log("sent message uploaded to " + h);
+		debugLog("sent message uploaded to " + h);
 		this._lastHashSelf = h;
 		this._ready = true;
-		
+
 	}
 
 	// starts the retrieve and post loop after we know the user of the other party
-	public async start(userOther: string, secret: string): Promise<any> { 
-		console.log("secret: " + secret);
+	public async start(userOther: string, secret: string): Promise<any> {
+		debugLog("secret: " + secret);
 		if (secret.substring(0, 2) === "0x") {
 			secret = secret.substring(2, secret.length);
 		}
@@ -309,11 +303,11 @@ class ChatSession {
 				msg.fromString(p);
 				this._messageCallback(msg);
 				if (msg.hasEnd()) {
-					console.log("caught end, terminating");
+					debugLog("caught end, terminating");
 					this.stop();
 				}
 			} catch(e) {
-				console.error(e);	
+				console.error(e);
 			}
 
 		}
@@ -346,26 +340,38 @@ class ChatSession {
 
 
 // us
-const keyPrivSelf = newPrivateKey();
-const keyPairSelf = createKeyPair(arrayToHex(keyPrivSelf));
-const keyPubSelf = keyPairSelf.getPublic("hex");
-const userSelf = pubKeyToAddress(createHex("0x" + keyPubSelf));
-const signerSelf = async bytes => sign(bytes, keyPairSelf.getPrivate());
+// const keyPrivSelf = newPrivateKey();
+// const keyPairSelf = createKeyPair(arrayToHex(keyPrivSelf));
+// const keyPubSelf = keyPairSelf.getPublic("hex");
+// const userSelf = pubKeyToAddress(createHex("0x" + keyPubSelf));
+
+const privateKeySelf = "0xae402705d028aac6c62ea98a54b5ae763f527c3e14cf84c89a1e4e4ec4d43921";
+const publicKeySelf = "0x035823ce10d0e06bfc14ff26f50776916fc920c9ce75b5ab8c96e3f395f13d179f";
+const userSelf = "0xa1615832e7196080d058698a8d85b00bbc2a19dd";
+
+const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
+const keyPrivSelf = createHex(privateKeySelf).toBytesArray();
+const keyPubSelf = createHex(publicKeySelf).toBytesArray();
+
+// the handshake feed
+const privateKeyTmp = "0x3c35041a11cd5ca8bda7c3aa36c7a8d09d7671977f3055f7d66d6068db5644f8";
+const publicKeyTmp = "0x03f0070f8376b33b3216eaab30f3b12919a4876c2bdf2b21e87754d2f4d75abea1";
+const userTmp = "0x00c13ab42a8650c29998b0a4bb2cd1906128e7de";
 
 
-// the handshake feed 
-const keyPairTmp = createKeyPair(keyTmpRequestPriv);
-const keyTmpPub = keyPairTmp.getPublic("hex");
-const userTmp = pubKeyToAddress(createHex("0x" + keyTmpPub));
+
+// const keyPairTmp = createKeyPair(keyTmpRequestPriv);
+// const keyTmpPub = keyPairTmp.getPublic("hex");
+// const userTmp = pubKeyToAddress(createHex("0x" + keyTmpPub));
 let topicTmp = "0x";
 // BUG: createHex doesn't seem to work for the hash output, annoying!
-let topicTmpArray = hash(Buffer.from(keyPairTmp.getPrivate("hex"))); 
+let topicTmpArray = hash(Buffer.from(privateKeyTmp));
 topicTmpArray.forEach(function(k) {
 	let s = "00" + Math.abs(k).toString(16);
 	topicTmp += s.substring(s.length-2, s.length);
-	
+
 });
-const signerTmp = async bytes => sign(bytes, keyPairTmp.getPrivate());
+const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
 
 
 // the peer
@@ -375,7 +381,7 @@ let userOther = undefined;
 
 // set up the session object
 function logMessage(msg:ChatMessage) {
-	console.log("got message: " + msg.payload());
+	debugLog("got message: " + msg.payload());
 }
 export let chatSession = undefined;
 
@@ -411,12 +417,12 @@ class ChatCipher {
 			pad.push(0x00);
 		}
 
-		console.log("datasize: " + data.length + " pad " + padNeeded);	
+		debugLog("datasize: " + data.length + " pad " + padNeeded);
 		const buf = new ArrayBuffer(data.length + padNeeded);
 		let newdata = new Uint8Array(buf);
 		newdata.set(data, 0);
 		newdata.set(pad, data.length);
-		console.log("newdata: " + newdata.length);
+		debugLog("newdata: " + newdata.length);
 		return {
 			data: newdata,
 			padLength: padNeeded,
@@ -424,7 +430,7 @@ class ChatCipher {
 	}
 
 	// assumes utf8 input
-	// serial is currently not used, as ecb mode only needs the secret 
+	// serial is currently not used, as ecb mode only needs the secret
 	// adds a one byte prefix to the payload, which contains the length of the padding
 	// data is padding to multiple of 16 INCLUDING that length byte
 	//encrypt = (data:string):string => {
@@ -477,7 +483,7 @@ export function arrayToHex(data:any):string {
 		let h = n.toString(16);
 		if (h.length == 1) {
 			h = "0" + h;
-		}	
+		}
 		hexout += h;
 	});
 	return hexout;
@@ -485,23 +491,23 @@ export function arrayToHex(data:any):string {
 
 
 //async function uploadToFeed(bz: any, user: string, topic: string, data: string): Promise<string> {
-async function uploadToFeed(bz: any, user: string, topic: string, data: Uint8Array|string): Promise<string> {
+async function uploadToFeed(bz: BzzAPI, user: string, topic: string, data: Uint8Array|string): Promise<string> {
 
 	const feedOptions = {
 		user: user,
 		topic: topic,
 	}
 
-	console.log("uploading " + data);
+	debugLog("uploading " + data);
 	let h = "";
 	if (typeof data === 'string') {
 		h = await bz.upload(data);
 	} else {
 		h = await bz.upload(Buffer.from(data));
 	}
-	console.log("data uploaded to " + h);
+	debugLog("data uploaded to " + h);
 	const r = await bz.setFeedContentHash(feedOptions, h);
-	console.log("set feed: " + user + "/" + topic + ": " +  h);
+	debugLog("set feed: " + user + "/" + topic + ": " +  h);
 	return h;
 }
 
@@ -520,16 +526,16 @@ function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
 async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
-	keyPairOtherPub = createPublic(handshakeOther); 
+	keyPairOtherPub = createPublic(handshakeOther);
 	const pubArray = hexToArray(handshakeOther);
 	const pubBuffer = Buffer.from(pubArray);
-	console.log(pubArray);
-	console.log(handshakeOther);
+	debugLog(pubArray);
+	debugLog(handshakeOther);
 	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
-	console.log(pubBuffer);
+	debugLog(pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
-	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
+	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
 	await chatSession.start(userOther, secret);
 	return userOther;
 }
@@ -542,9 +548,9 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 
 	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
-		
-	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')));
-	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
+
+	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
+	const myHash = await uploadToFeed(bz, userTmp, topicTmp, new Uint8Array(keyPubSelf));
 	await chatSession.start(userOther, secret);
 	return userOther;
 }
@@ -562,7 +568,7 @@ async function checkResponse(myHash:string, bz:any, attempts:number):Promise<str
 		const handshakeOther = await r.text();
 		const userOther = await connectToPeer(handshakeOther, undefined);
 		return userOther;
-	}	
+	}
 }
 
 // stolen from https://github.com/felfele/felfele/src/Utils.ts
@@ -582,31 +588,28 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest():Promise<string> {
+async function startRequest(manifestCallback: (manifest: string) => void):Promise<string> {
 
 	let userOther = undefined;
-	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
-	const myHash = await uploadToFeed(bz, userTmp, topicTmp, keyPubSelf);
-	console.log("uploaded to " + myHash);
-	publishResponseScript(bz, keyPairTmp.getPrivate("hex"));
-	for (let i = 0; i < MAXCONNECTIONPOLLS; i++) {
-		console.log("check if started, attempt " + i);
+	const myHash = await uploadToFeed(bz, userTmp, topicTmp, new Uint8Array(keyPubSelf));
+	debugLog("uploaded to " + myHash);
+	publishResponseScript(bz, privateKeyTmp, manifestCallback);
+	for (;;) {
 		const jetzt = Date.now() + 1000;
 		userOther = await checkResponse(myHash, bz, 0);
-		if (userOther !== undefined) {	
+		if (userOther !== undefined) {
 			return userOther;
 		}
 		await waitUntil(jetzt);
 	}
-	throw("no response");
 }
 
 async function startResponse():Promise<string> {
 	// TODO: derive proper secret from own privkey
 	//const secret = ZEROHASH;
-	//console.log("secret zero: " + secret.length);
+	//debugLog("secret zero: " + secret.length);
 	const signBytes = signerTmp;
 	const bz = new BzzAPI({ url: GATEWAY_URL, signBytes: signerTmp });
 
@@ -619,21 +622,22 @@ async function startResponse():Promise<string> {
 	return userOther;
 }
 
-function init(messageCallback:any, stateCallback:any) {
+export function init(messageCallback:any, manifestCallback: (manifest: string) => void, stateCallback:any) {
 	chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf, messageCallback);
 	if (keyTmpRequestPriv === undefined) {
-		startRequest().then((v) => {
-			stateCallback();	
+		debugLog('start request');
+		startRequest(manifestCallback).then((v) => {
+			stateCallback();
 		}).catch((e) => {
-			console.error("error starting response: " + e);
+			console.error("error starting request: " + e);
 		});
 	} else {
 		startResponse().then((v) => {
-			stateCallback();	
+			stateCallback();
 		}).catch((e) => {
 			console.error("error starting response: " + e);
 		});
 	}
 }
 
-init(logMessage, () => {});
+// init(logMessage, () => {});
