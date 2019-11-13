@@ -71,9 +71,9 @@
                 chatInput.value = '';
             }
 
-            function setManifest(manifest) {
+            function setLink(manifest, sharedPrivateKey) {
                 var linkInput = document.getElementById("linkInput");
-                var manifestLink = "http://localhost:8500/bzz:/" + manifest;
+                var manifestLink = "http://localhost:8500/bzz:/" + manifest + '/?' + sharedPrivateKey;
                 linkInput.value = manifestLink;
                 var copyButton = document.getElementById("copyButton");
                 copyButton.disabled = false;
@@ -89,8 +89,8 @@
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
                 init(function(msg) {
                     console.log('messageCallback', msg);
-                }, function(manifest) {
-                    setManifest(manifest);
+                }, function(manifest, sharedPrivateKey) {
+                    setLink(manifest, sharedPrivateKey);
                 },
                 function() {
                     console.log('stateCallback');
