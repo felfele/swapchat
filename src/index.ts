@@ -35,7 +35,7 @@ function getTmpPrivKey(): string | undefined {
 //
 // everything below here must be immutable and usable for both requester and responder
 // the compiled version of it will be used in the script generation for the responser
-const GATEWAY_URL = 'http://localhost:8500';
+let GATEWAY_URL = 'http://localhost:8500';
 const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
 const MAXCONNECTIONPOLLS = 7;
@@ -272,7 +272,7 @@ class ChatSession {
 		if (this._debug) {
 			console.log("sent message uploaded to " + h);
 		}
-		
+
 	}
 
 	// starts the retrieve and post loop after we know the user of the other party
@@ -292,7 +292,7 @@ class ChatSession {
 	}
 
 	// make sure we have pings sent every period if no other message is in the process of being sent
-	private ping = async () => { 
+	private ping = async () => {
 		if (this._running) {
 			let msg = this.newMessage();
 			//this.sendMessage(msg);
@@ -311,23 +311,32 @@ class ChatSession {
 	private poll = async () =>  {
 		let messages = [];
 		let bz = this._bzz;
-		let r = await downloadFromFeed(bz, this._userOther, this._topicOther);
-		//let p = this._inCrypt.decrypt(t);
-		let t = await r.text();
-		let p = t;
-		let msg = new ChatMessage();
+		let p = undefined;
+		try {
+			let r = await downloadFromFeed(bz, this._userOther, this._topicOther);
+			//let p = this._inCrypt.decrypt(t);
+			p = await r.text();
+		} catch (e) {
+			console.log('downloadFromFeed', e);
+			setTimeout(this.poll, this._msgPeriod);
+			return;
+		}
 		console.log("poll recv: " + p);
-		//msg.fromString(p);
+		if (p === ZEROHASH) {
+			setTimeout(this.poll, this._msgPeriod);
+			return;
+		}
+
 		//let currentHash = msg._lastHashSelf;
-		//console.log("Got feed message with lasthash: " + msg._lastHashSelf + " hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
 		//currentHash = msg._lastHashSelf;
 		//messages.push(msg);
 		let currentHash = p;
+		console.log("Got feed message with hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
 
 		while (currentHash != this._lastHashOther) {
 			try {
-				r = await bz.download(currentHash, {mode: 'raw'});
-				msg = new ChatMessage();
+				let r = await bz.download(currentHash, {mode: 'raw'});
+				let msg = new ChatMessage();
 				let p = await r.text();
 				msg.fromString(p);
 				console.log("hash: cur " + currentHash + " obj " + this._lastHashOther + " msg " + msg._lastHashSelf);
@@ -345,9 +354,9 @@ class ChatSession {
 			}
 		}
 		this._pollSerial++;
+		this._lastHashOther = p;
+		console.log("set lasthash: obj " + this._lastHashOther + " msg " + currentHash);
 		if (messages.length > 0) {
-			this._lastHashOther = messages[0]._lastHashSelf;
-			console.log("set lasthash: obj " + this._lastHashOther + " msg " + messages[0]._lastHashSelf);
 			messages.reverse();
 			messages.forEach(this._messageCallback);
 		}
@@ -589,18 +598,22 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 }
 
 async function checkResponse(myHash:string, bz:any, attempts:number):Promise<string> {
-	const r = await downloadFromFeed(bz, userTmp, topicTmp);
-	const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
-	if (currentHash !== myHash) {
+	try {
+		const r = await downloadFromFeed(bz, userTmp, topicTmp);
+		const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
+		if (currentHash !== myHash) {
 
-		// catch potential delayed stream reads
-		if (keyPairOtherPub !== undefined) {
-			return;
+			// catch potential delayed stream reads
+			if (keyPairOtherPub !== undefined) {
+				return;
+			}
+
+			const handshakeOther = await r.text();
+			const userOther = await connectToPeer(handshakeOther, undefined);
+			return userOther;
 		}
-
-		const handshakeOther = await r.text();
-		const userOther = await connectToPeer(handshakeOther, undefined);
-		return userOther;
+	} catch (e) {
+		console.log('checkResponse', e);
 	}
 }
 
@@ -621,17 +634,16 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(manifestCallback: ManifestCallback):Promise<string> {
+async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<string> {
 
 	let userOther = undefined;
-	const bz = new BzzAPI({ url: GATEWAY_URL,  signBytes: signerTmp });
 
-	const myHash = await uploadToFeed(bz, userTmp, topicTmp, publicKeySelf);
+	const myHash = await uploadToFeed(bzz, userTmp, topicTmp, publicKeySelf);
 	console.log("uploaded to " + myHash);
-	publishResponseScript(bz, privateKeyTmp, manifestCallback);
+	publishResponseScript(bzz, privateKeyTmp, manifestCallback);
 	for (;;) {
 		const jetzt = Date.now() + 1000;
-		userOther = await checkResponse(myHash, bz, 0);
+		userOther = await checkResponse(myHash, bzz, 0);
 		if (userOther !== undefined) {
 			return userOther;
 		}
@@ -639,27 +651,27 @@ async function startRequest(manifestCallback: ManifestCallback):Promise<string> 
 	}
 }
 
-async function startResponse():Promise<string> {
-	const bz = new BzzAPI({ url: GATEWAY_URL, signBytes: signerTmp });
-	const r = await downloadFromFeed(bz, userTmp, topicTmp);
+async function startResponse(bzz: BzzAPI):Promise<string> {
+	const r = await downloadFromFeed(bzz, userTmp, topicTmp);
 	const handshakePubOther = await r.text();
 	console.log('handshakePubOther', handshakePubOther);
-	const userOther = await connectToPeerTwo(handshakePubOther, bz);
+	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
 	return userOther;
 }
 
-export function init(messageCallback:any, manifestCallback: ManifestCallback, stateCallback:any) {
-	chatSession = new ChatSession(GATEWAY_URL, userSelf, signerSelf, messageCallback);
+export function init(gatewayAddress: string, messageCallback:any, manifestCallback: ManifestCallback, stateCallback:any) {
+	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerTmp });
+	chatSession = new ChatSession(gatewayAddress, userSelf, signerSelf, messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		console.log('start request');
-		startRequest(manifestCallback).then((v) => {
+		startRequest(bzz, manifestCallback).then((v) => {
 			stateCallback();
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 		});
 	} else {
 		chatSession.setDebug();
-		startResponse().then((v) => {
+		startResponse(bzz).then((v) => {
 			stateCallback();
 		}).catch((e) => {
 			console.error("error starting response: ", e);
@@ -667,23 +679,18 @@ export function init(messageCallback:any, manifestCallback: ManifestCallback, st
 	}
 }
 
-// for start in node.js
-if (typeof process !== 'undefined') {
-	init(logMessage, () => {}, () => {});
-}
-
-let debugMsgs = ["foo", "bar", "xyzzy", "plugh", "inky", "pinky", "blinky", "clyde"];
-function debugSend(c:number) {
-	if (c > 7) {
-		return;
-	}
+export function send(message: string) {
 	try {
 		let msg = chatSession.newMessage();
-		msg.setPayload(debugMsgs[c]);
+		msg.setPayload(message);
 		chatSession.sendMessage(msg);
-		c++;
 	} catch(e) {
 		console.error(e);
 	}
-	setTimeout(debugSend, 1000, c);
+}
+
+// for start in node.js
+if (typeof process !== 'undefined') {
+	// init(logMessage, () => {}, () => {});
+	// setInterval(() => send("" + Date.now()), 1000);
 }
