@@ -191,6 +191,43 @@ class ChatMessage {
 	}
 }
 
+const stripHexPrefix = (s: string) => s.startsWith("0x") ? s.slice(2) : s;
+
+const encryptAesGcm = async (message: string, secretHex: string): Promise<Uint8Array> => {
+	try {
+		const iv = crypto.getRandomValues(new Uint8Array(12));
+		const secretArray = hexToArray(stripHexPrefix(secretHex));
+		const data = new TextEncoder().encode(message);
+		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
+		const ciphertext = await crypto.subtle.encrypt({
+			name: 'AES-GCM',
+			iv,
+		}, secretKey, data);
+		const payload = new Uint8Array(iv.length + ciphertext.byteLength);
+		payload.set(iv);
+		payload.set(new Uint8Array(ciphertext), 12);
+		return payload;
+	} catch (e) {
+		console.log('encryptAesGcm', {e});
+	}
+}
+
+const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Promise<string> => {
+	try {
+		const iv = encryptedData.slice(0, 12);
+		const ciphertext = encryptedData.slice(12);
+		const secretArray = hexToArray(secretHex);
+		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
+		const cleartext = await crypto.subtle.decrypt({
+			name: 'AES-GCM',
+			iv,
+		}, secretKey, ciphertext);
+		const message = new TextDecoder().decode(cleartext);
+		return message;
+	} catch (e) {
+		console.log('decryptAesGcm', {e});
+	}
+}
 
 // Session object
 // keeps track of message order and controls sending and receiving of messages
@@ -259,11 +296,11 @@ class ChatSession {
 		if (this._debug) {
 			console.log("sending: " + msg.toString());
 		}
-		//const payload = this._outCrypt.encrypt(msg.toString());
-		const payload = msg.toString();
+		const payload = await encryptAesGcm(msg.toString(), this._secret);
 		let h = '';
 		try {
-			h = await this._bzz.upload(payload);
+			const buf = Buffer.from(payload);
+			h = await this._bzz.upload(buf);
 		} catch(e) {
 			throw "error uploading msg: " + e
 		}
@@ -281,8 +318,7 @@ class ChatSession {
 		if (secret.substring(0, 2) === "0x") {
 			secret = secret.substring(2, secret.length);
 		}
-		this._inCrypt = new ChatCipher(secret);
-		this._outCrypt = new ChatCipher(secret);
+		this._secret = secret;
 		this._userOther = userOther;
 		this._topicMe = getFeedTopic({
 			name: this.userToTopic(this._userOther)
@@ -336,8 +372,9 @@ class ChatSession {
 		while (currentHash != this._lastHashOther) {
 			try {
 				let r = await bz.download(currentHash, {mode: 'raw'});
+				let buf = await r.arrayBuffer();
+				const p = await decryptAesGcm(new Uint8Array(buf), this._secret);
 				let msg = new ChatMessage();
-				let p = await r.text();
 				msg.fromString(p);
 				console.log("hash: cur " + currentHash + " obj " + this._lastHashOther + " msg " + msg._lastHashSelf);
 				currentHash = msg._lastHashSelf;
@@ -514,7 +551,7 @@ class ChatCipher {
 	}
 }
 
-export function hexToArray(data:string):any {
+export function hexToArray(data:string):Uint8Array {
 	let databuf = new ArrayBuffer(data.length / 2);
 	let uintdata = new Uint8Array(databuf);
 	for (var i = 0; i < uintdata.length; i++) {
