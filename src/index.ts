@@ -5,7 +5,6 @@ import { pubKeyToAddress, hash } from '@erebos/keccak256';
 import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings';
 
 const ec = require('eccrypto');
-const aesjs = require("aes-js");
 
 /////////////////////////////////
 // HEADER SCRIPT
@@ -416,8 +415,6 @@ class ChatSession {
 	}
 }
 
-
-
 // us
 const keyPairSelf = createKeyPair(arrayToHex(newPrivateKey()));
 const privateKeySelf = "0x" + keyPairSelf.getPrivate("hex");
@@ -471,84 +468,6 @@ export let chatSession = undefined;
 // crypto stuff
 function newPrivateKey() {
 	return ec.generatePrivate();
-}
-
-
-// TODO: switch to CTR but needs renegotiation implemented
-class ChatCipher {
-	_nextSerial: number = 0
-	_aes: any
-
-	// takes hex only for now
-	constructor(secret:string) {
-		//const secretArray = createHex("0x" + secret).toBytesArray();
-		//this._aes = new aesjs.ModeOfOperation.ctr(secretArray, new aesjs.Counter(serial));
-		const secretArray = hexToArray(secret);
-		this._aes = new aesjs.ModeOfOperation.ecb(secretArray);
-	}
-
-	// TODO: its uint8array but Array<number> doesn't work, test what does to safely type
-	// returns object:
-	// data: padded data
-	// padLength: amount of bytes added as padding
-	pad = (data:any):any => {
-		const padNeeded = 16 - (data.length % 16);
-
-		// TODO: can assign and guarantee init values to 0?
-		let pad = [];
-		for (var i = 0; i < padNeeded; i++) {
-			pad.push(0x00);
-		}
-
-		console.log("datasize: " + data.length + " pad " + padNeeded);
-		const buf = new ArrayBuffer(data.length + padNeeded);
-		let newdata = new Uint8Array(buf);
-		newdata.set(data, 0);
-		newdata.set(pad, data.length);
-		console.log("newdata: " + newdata.length);
-		return {
-			data: newdata,
-			padLength: padNeeded,
-		};
-	}
-
-	// assumes utf8 input
-	// serial is currently not used, as ecb mode only needs the secret
-	// adds a one byte prefix to the payload, which contains the length of the padding
-	// data is padding to multiple of 16 INCLUDING that length byte
-	//encrypt = (data:string):string => {
-	encrypt = (data:string):string => {
-		let databytes = aesjs.utils.utf8.toBytes(data);
-		let databyteswithpad = new Uint8Array(databytes.length + 1);
-		databyteswithpad.set(databytes, 1);
-		const padresult = this.pad(databyteswithpad);
-		databyteswithpad = padresult.data;
-		databyteswithpad[0] = padresult.padLength & 0xff;
-		const ciphertext = this._aes.encrypt(databyteswithpad);
-		this._nextSerial++;
-
-		// createHex returns strange results here, so manual once again
-		return arrayToHex(ciphertext);
-		return ciphertext;
-	}
-
-
-	// expects hex input WITHOUT 0x prefix
-	// gives utf8 output
-	// padding is in bytes (not chars in hex string)
-	// see also: encrypt
-	decrypt = (data:string, serial:number):string => {
-//		if (serial != this._nextSerial) {
-//			return undefined;
-//		}
-		// again createHex doesn't help us
-		const databuf = createHex(data).toBuffer();
-		let uintdata = hexToArray(data);
-		let plainbytes = this._aes.decrypt(uintdata);
-		const padLength = plainbytes[0];
-		plainbytes = plainbytes.slice(1, plainbytes.length-padLength);
-		return arrayToHex(plainbytes);
-	}
 }
 
 export function hexToArray(data:string):Uint8Array {
