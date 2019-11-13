@@ -1,6 +1,9 @@
 #!/bin/sh -e
 
 bzzapi="--bzzapi https://swarm-gateways.net"
+if [ "$1" != "" ]; then
+    bzzapi="--bzzapi $1"
+fi
 alias sw="swarm $bzzapi"
 
 bzzaccount="0x5660eb1fc0fa1abc2bef8d50fe7a2e094490d501"

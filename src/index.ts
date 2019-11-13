@@ -457,12 +457,6 @@ const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
 // the peer
 let keyPairOtherPub = undefined;
 let userOther = undefined;
-
-
-// set up the session object
-function logMessage(msg:ChatMessage) {
-	console.log("got message: " + msg.payload());
-}
 export let chatSession = undefined;
 
 // crypto stuff
@@ -616,6 +610,7 @@ async function startResponse(bzz: BzzAPI):Promise<string> {
 }
 
 export function init(gatewayAddress: string, messageCallback:any, manifestCallback: ManifestCallback, stateCallback:any) {
+	console.log('init called');
 	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerTmp });
 	chatSession = new ChatSession(gatewayAddress, userSelf, signerSelf, messageCallback);
 	if (keyTmpRequestPriv === undefined) {
@@ -643,10 +638,4 @@ export function send(message: string) {
 	} catch(e) {
 		console.error(e);
 	}
-}
-
-// for start in node.js
-if (typeof process !== 'undefined') {
-	// init(logMessage, () => {}, () => {});
-	// setInterval(() => send("" + Date.now()), 1000);
 }

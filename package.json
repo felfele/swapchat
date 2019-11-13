@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "ts-node src/index.ts",
-    "pack": "tsc src/index.ts && npx webpack"
+    "start": "ts-node src/start.ts",
+    "pack": "tsc --outDir build src/index.ts && npx webpack"
   },
   "keywords": [],
   "author": "",

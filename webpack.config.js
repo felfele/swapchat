@@ -1,6 +1,6 @@
 module.exports = {
 	entry: {
-		index: './src/index.js',
+		index: './build/index.js',
 	},
 	output: {
 		libraryTarget: 'window'
