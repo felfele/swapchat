@@ -151,8 +151,8 @@ class ChatMessage {
 		this._serial = serial;
 	}
 
-	public addPayload = (payload: string) => {
-		this._payload += payload;
+	public setPayload = (payload: string) => {
+		this._payload = payload;
 	}
 
 	public payload = ():string => {
@@ -183,7 +183,6 @@ class ChatMessage {
 
 	public fromString = (s:string) => {
 		let o = JSON.parse(s);
-		console.log(o);
 		this._lastHashSelf = o.lastSelf;
 		this._lastHashOther = o.lastOther;
 		this._serial = o.serial;
@@ -204,17 +203,20 @@ class ChatSession {
 	_lastHashSelf: string = ZEROHASH	// previous hash from own posts
 	_lastHashOther: string = ZEROHASH	// previous hash from peer's posts
 	_serial: number = 0			// increments on every message post (includes ping loop)
-	_ready: boolean = true			// false while in process of sending messages
+	//_ready: boolean = true			// false while in process of sending messages
 	_bzz: BzzAPI				// swarm transport api object
 	_userMe: string				// own user, who signs posts
 	_userOther: string			// peer user, from whom we receive messages
 	_topicMe: string			// topic (function of user of peer)
 	_topicOther: string			// topic (function of own user)
 	_secret: string				// key to encrypt payloads with
-	_loop: any				// interval id for ping loop
 	_outCrypt:any				// output symmetric crypter
 	_inCrypt:any				// output symmetric crypter
+	_msgPeriod:number = MSGPERIOD
 	_messageCallback:any
+	_debug:boolean = false
+	_running:boolean = true
+	_pollSerial:number = 0
 
 	constructor(url: string, userMe: string, signer: any, messageCallback: any) {
 		const signBytes = signer;
@@ -223,8 +225,15 @@ class ChatSession {
 		this._topicOther = getFeedTopic({
 			name: this.userToTopic(this._userMe)
 		});
-		this._ready = true;
 		this._messageCallback = messageCallback;
+	}
+
+	public setDebug = () => {
+		this._debug = true;
+	}
+
+	public setMessagePeriod = (p:number) => {
+		this._msgPeriod = p;
 	}
 
 	public userToTopic = (user: string): string => {
@@ -239,10 +248,6 @@ class ChatSession {
 	// the creation of new messages will be locked until the message is sent
 	// if locked, undefined will be returned
 	public newMessage = (): ChatMessage => {
-		if (!this._ready) {
-			return undefined;
-		}
-		this._ready = false;
 		let msg = new ChatMessage(this._lastHashSelf, this._lastHashOther, this._serial);
 		this._serial++;
 		return msg;
@@ -251,21 +256,23 @@ class ChatSession {
 	// attempts to post the message to the feed
 	// on success unlocks message creation (newMessage can be called again)
 	public sendMessage = async (msg: ChatMessage) => {
-		console.log("sending: " + msg.toString());
+		if (this._debug) {
+			console.log("sending: " + msg.toString());
+		}
 		//const payload = this._outCrypt.encrypt(msg.toString());
 		const payload = msg.toString();
 		let h = '';
 		try {
-			h = await uploadToFeed(this._bzz, this._userMe, this._topicMe, payload);
+			h = await this._bzz.upload(payload);
 		} catch(e) {
-			this._ready = true;
-			throw "error uploading feed: " + e
+			throw "error uploading msg: " + e
 		}
 		this._lastAt = Date.now();
-		console.log("sent message uploaded to " + h);
 		this._lastHashSelf = h;
-		this._ready = true;
-
+		if (this._debug) {
+			console.log("sent message uploaded to " + h);
+		}
+		
 	}
 
 	// starts the retrieve and post loop after we know the user of the other party
@@ -285,52 +292,75 @@ class ChatSession {
 	}
 
 	// make sure we have pings sent every period if no other message is in the process of being sent
-	private ping = () => {
-		if (this._ready && Date.now() - this._lastAt > MSGPERIOD) {
+	private ping = async () => { 
+		if (this._running) {
 			let msg = this.newMessage();
-			this.sendMessage(msg);
+			//this.sendMessage(msg);
+			const feedOptions = {
+				user: this._userMe,
+				topic: this._topicMe,
+			}
+			let r = await this._bzz.setFeedContent(feedOptions, this._lastHashSelf);
+			console.log("ping res: " + r);
 		}
-		setTimeout(this.ping, MSGPERIOD);
+		if (this._running) {
+			setTimeout(this.ping, MSGPERIOD);
+		}
 	}
 
+	private poll = async () =>  {
+		let messages = [];
+		let bz = this._bzz;
+		let r = await downloadFromFeed(bz, this._userOther, this._topicOther);
+		//let p = this._inCrypt.decrypt(t);
+		let t = await r.text();
+		let p = t;
+		let msg = new ChatMessage();
+		console.log("poll recv: " + p);
+		//msg.fromString(p);
+		//let currentHash = msg._lastHashSelf;
+		//console.log("Got feed message with lasthash: " + msg._lastHashSelf + " hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
+		//currentHash = msg._lastHashSelf;
+		//messages.push(msg);
+		let currentHash = p;
 
-	private async poll() {
-		let currentHash = "";
 		while (currentHash != this._lastHashOther) {
 			try {
-				let r = await downloadFromFeed(this._bzz, this._userOther, this._topicOther);
-				let t = await r.text();
-				//let p = this._inCrypt.decrypt(t);
-				let p = t;
-				let msg = new ChatMessage();
+				r = await bz.download(currentHash, {mode: 'raw'});
+				msg = new ChatMessage();
+				let p = await r.text();
 				msg.fromString(p);
-				this._messageCallback(msg);
+				console.log("hash: cur " + currentHash + " obj " + this._lastHashOther + " msg " + msg._lastHashSelf);
+				currentHash = msg._lastHashSelf;
+				console.log("Got linked message with lasthash: " + msg._lastHashSelf + " hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
 				if (msg.hasEnd()) {
 					console.log("caught end, terminating");
 					this.stop();
+					this._running = false;
 				}
+				messages.push(msg);
 			} catch(e) {
 				console.error(e);
+				break;
 			}
-
 		}
-		setTimeout(this.poll, MSGPERIOD);
+		this._pollSerial++;
+		if (messages.length > 0) {
+			this._lastHashOther = messages[0]._lastHashSelf;
+			console.log("set lasthash: obj " + this._lastHashOther + " msg " + messages[0]._lastHashSelf);
+			messages.reverse();
+			messages.forEach(this._messageCallback);
+		}
+		if (this._running) {
+			setTimeout(this.poll, this._msgPeriod);
+		}
 	}
 
 	// teardown of chat session
 	public async stop(): Promise<any> {
-		let self = this;
+		this._running = false;
 		return new Promise((whohoo, doh) => {
-			clearInterval(self._loop);
-			let tryStop = setInterval(function() {
-				if (self._ready) {
-					let msg = self.newMessage();
-					msg.setEnd();
-					self.sendMessage(msg);
-					clearInterval(tryStop);
-					whohoo();
-				}
-			}, 100);
+			whohoo();
 		});
 	}
 
@@ -503,16 +533,13 @@ async function uploadToFeed(bz: BzzAPI, user: string, topic: string, data: Uint8
 		topic: topic,
 	}
 
-	console.log("uploading " + data);
 	let h = "";
 	if (typeof data === 'string') {
 		h = await bz.upload(data);
 	} else {
 		h = await bz.upload(Buffer.from(data));
 	}
-	console.log("data uploaded to " + h);
 	const r = await bz.setFeedContentHash(feedOptions, h);
-	console.log("set feed: " + user + "/" + topic + ": " +  h);
 	return h;
 }
 
@@ -631,6 +658,7 @@ export function init(messageCallback:any, manifestCallback: ManifestCallback, st
 			console.error("error starting request: ", e);
 		});
 	} else {
+		chatSession.setDebug();
 		startResponse().then((v) => {
 			stateCallback();
 		}).catch((e) => {
@@ -642,4 +670,20 @@ export function init(messageCallback:any, manifestCallback: ManifestCallback, st
 // for start in node.js
 if (typeof process !== 'undefined') {
 	init(logMessage, () => {}, () => {});
+}
+
+let debugMsgs = ["foo", "bar", "xyzzy", "plugh", "inky", "pinky", "blinky", "clyde"];
+function debugSend(c:number) {
+	if (c > 7) {
+		return;
+	}
+	try {
+		let msg = chatSession.newMessage();
+		msg.setPayload(debugMsgs[c]);
+		chatSession.sendMessage(msg);
+		c++;
+	} catch(e) {
+		console.error(e);
+	}
+	setTimeout(debugSend, 1000, c);
 }
