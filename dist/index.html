@@ -123,6 +123,14 @@ html, body, .container {
     height: 6vw;
 }
 
+.mainContainer {
+    height: 100%;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: stretch;
+}
+
 .container {
     display: -webkit-flexbox;
     display: -ms-flexbox;
@@ -182,8 +190,8 @@ html, body, .container {
 }
 
 .chat {
+    flex: 1;
     overflow: hidden;
-    height: 100%;
     width: 100%;
     margin: 0;
     padding: 0;
@@ -314,7 +322,6 @@ input.nostyle {
     background: transparent;
 }
 .write {
-    bottom: 0px;
     width: 100%;
     height: 8vmax;
     border-top: thin solid lightgrey;
@@ -338,36 +345,36 @@ input.nostyle {
         </style>
     </head>
     <body onload="onLoad()">
-        <div id="debug" class="debug" onclick="changeMode()">
-            <button>Mode</button>
-        </div>
-
-        <div id="link" class="container">
-            <div class="inputContainer">
-                <input
-                    id="linkInput"
-                    type="text"
-                    value="Waiting for manifest..."
-                    class="link"
-                    readonly
-                />
-                <button id="copyButton" class="copyButton" onclick="copyToClipboard()" disabled>Copy</button>
+        <div class="mainContainer">
+            <div id="debug" class="debug" onclick="changeMode()">
+                <button>Mode</button>
             </div>
-            <div id="loader" class="loader"></div>
-        </div>
-
-        <div id="chat" class="chat">
             <div id="head" class="status-bar style-bg">
                 <p>Swarm disposable chat</p>
             </div>
 
-            <ul class="history" id="history"></ul>
+            <div id="link" class="container">
+                <div class="inputContainer">
+                    <input
+                        id="linkInput"
+                        type="text"
+                        value="Waiting for manifest..."
+                        class="link"
+                        readonly
+                    />
+                    <button id="copyButton" class="copyButton" onclick="copyToClipboard()" disabled>Copy link to clipboard</button>
+                </div>
+                <div id="loader" class="loader"></div>
+            </div>
 
-            <div class="write">
-                <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
-                <div class="sendcontainer">
-                    <!-- <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/> -->
-                    <button id="sendButton" class="sendButton" onclick="sendMessage()">Send</button>
+            <div id="chat" class="chat">
+                <ul class="history" id="history"></ul>
+                <div class="write">
+                    <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
+                    <div class="sendcontainer">
+                        <!-- <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/> -->
+                        <button id="sendButton" class="sendButton" onclick="sendMessage()">Send</button>
+                    </div>
                 </div>
             </div>
         </div>
