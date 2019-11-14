@@ -89,6 +89,9 @@
 
             function onLoad() {
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
+                var debug = window.location.search.indexOf('debug') > 0 ? "block" : "none";
+                console.log('onLoad', debug, window.location.search);
+                document.getElementById("debug").style.display = debug;
                 console.log('location', {location: window.location});
                 gatewayAddress = location.origin + "/";
                 init(gatewayAddress, function(msg) {
@@ -146,7 +149,7 @@ html, body, .container {
 }
 
 .inputContainer {
-    width: 100%;
+    width: 90%;
     display: -webkit-flexbox;
     display: -ms-flexbox;
     display: -webkit-flex;
@@ -160,18 +163,17 @@ html, body, .container {
 }
 
 .link {
-    font-size: large;
+    font-size: 3vh;
     width: 80%;
 }
 
 .copyButton {
-    font-size: 20;
+    font-size: 3vh;
 }
 
 .sendButton {
-    font-size: 20;
-    width: 10vw;
-    margin-right: 1vw;
+    font-size: 3vh;
+    width: 100%;
 }
 
 .loader {
@@ -204,11 +206,12 @@ p.message {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
-    padding: 1vmax;
+    padding: 0.8vmax;
     background-color: #ddd;
     border-radius: 1vmax;
     max-width: 70%;
     margin: 0.2vmax;
+    font-size: 2.5vh;
 }
 p.message.your {
     border-bottom-left-radius: 0px;
@@ -257,8 +260,11 @@ ul.history {
 #head {
     width: 100%;
     transition: all 0.333s ease-in-out;
-    font-size: 20;
+    font-size: 3vh;
     padding-left: 20;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 .style-bg {
     height: 6vmax;
@@ -313,7 +319,7 @@ ul.history {
     color: #1a1a1a;
     border: 0;
     outline: none;
-    font-size: 20;
+    font-size: 3vh;
 }
 input.nostyle {
     border: 0;
@@ -325,23 +331,19 @@ input.nostyle {
     width: 100%;
     height: 8vmax;
     border-top: thin solid lightgrey;
+    display: flex;
+    flex-direction: row;
+    justify-content: stretch;
 }
 .sendcontainer {
-    position: relative;
-    float: right;
     height: 100%;
+    width: 20vmax;
     display: flex;
+    flex-direction: column;
     justify-content: center;
-    align-items: center;
+    align-items: stretch;
+    margin-right: 1vw;
 }
-.send {
-    width: 4vmax;
-    height: 4vmax;
-    cursor: pointer;
-    display:table-cell;
-    vertical-align:middle;
-}
-
         </style>
     </head>
     <body onload="onLoad()">
@@ -372,7 +374,6 @@ input.nostyle {
                 <div class="write">
                     <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
                     <div class="sendcontainer">
-                        <!-- <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/> -->
                         <button id="sendButton" class="sendButton" onclick="sendMessage()">Send</button>
                     </div>
                 </div>
