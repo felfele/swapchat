@@ -51,12 +51,15 @@
                 }
             }
 
-            function addMessageToHistory(message, mine) {
+            function addMessageToHistory(message, mine, bot) {
                 let liClass = 'entry';
                 let pClass = 'message';
                 if (mine) {
                     liClass += ' mine';
                     pClass += ' mine';
+                } else if(bot) {
+                    liClass += ' bot';
+                    pClass += ' bot';
                 } else {
                     liClass += ' your';
                     pClass += ' your';
@@ -69,7 +72,8 @@
                 var chatInput = document.getElementById("chatinput");
                 console.log(chatInput);
                 var text = chatInput.value;
-                addMessageToHistory(text, true);
+                if(text === "") return false;
+                addMessageToHistory(text, true, false);
                 send(text);
                 chatInput.value = '';
             }
@@ -90,22 +94,26 @@
 
             function onLoad() {
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
-                console.log('location', {location: window.location, });
+                // console.log('location', {location: window.location, });
                 // gatewayAddress = location.origin + "/";
                 init(gatewayAddress, function(msg) {
                     console.log('messageCallback', msg);
-                    addMessageToHistory(msg.payload(), false);
+                    addMessageToHistory(msg.payload(), false, false);
                 }, function(manifest, sharedPrivateKey) {
                     setLink(manifest, sharedPrivateKey);
+                    addMessageToHistory('welcome to SwapChat!', false, true);
+                    addMessageToHistory('<a onclick="">click to copy your link...</a>', false, true);
                 },
                 function() {
                     console.log('stateCallback');
-                    changeMode();
+                    addMessageToHistory('other user has connected...', false, true);
+                    // changeMode();
                 });
             }
         </script>
-        <link rel="stylesheet" href="https://kristopolous.github.io/BOOTSTRA.386/assets/css/bootstrap.css">
-        <link rel="stylesheet" href="https://kristopolous.github.io/BOOTSTRA.386/assets/css/bootstrap-responsive.css">
+
+        <link rel="stylesheet" href="bootstrap.css">
+        <link rel="stylesheet" href="bootstrap-responsive.css">
 
         <style>
 
@@ -166,6 +174,7 @@ html, body{
 .link {
     font-size: large;
     width: 80%;
+    display: none;
 }
 
 .copyButton {
@@ -201,7 +210,7 @@ html, body{
     width: 100%;
     margin: 0;
     padding: 0;
-    display: none;
+    display: flex;
     flex-direction: column;
     justify-content: stretch;
 }
@@ -220,6 +229,7 @@ p.message {
 p.message.your {
     border-bottom-left-radius: 0px;
     margin-left: 10;
+    color: darkgrey;
 }
 p.message.mine {
     background-color: #006DF0;
