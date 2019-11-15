@@ -22,4 +22,5 @@ script_topic="0x646973706f636861745f73637269707400000000000000000000000000000000
 
 sw $password --bzzaccount "$bzzaccount" feed update --topic "$script_topic" "0x$script_hash"
 
-sw --recursive --defaultpath dist/index.html up dist
+bzz=$(sw --recursive --defaultpath dist/index.html up dist)
+echo "$gateway/bzz:/$bzz"

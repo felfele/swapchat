@@ -1,33 +1,10 @@
 <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="qrcode.min.js"></script>
         <script src="index.js"></script>
         <script>
-
-            var mode = "link"; // or "chat"
             var gatewayAddress = "https://swarm2.fairdatasociety.org/";
-            function changeMode() {
-                if (mode === "link") {
-                    mode = "chat";
-                    chat("flex");
-                    link("none");
-                } else {
-                    mode = "link";
-                    chat("none");
-                    link("flex");
-                }
-            }
-
-            function chat(mode) {
-                var chat = document.getElementById("chat");
-                chat.style.display = mode;
-            }
-
-            function link(mode) {
-                var link = document.getElementById("link");
-                link.style.display = mode;
-            }
-
             function copyToClipboard() {
                 var input = document.getElementById("linkInput");
                 var range = document.createRange();
@@ -64,8 +41,33 @@
                     liClass += ' your';
                     pClass += ' your';
                 }
-                const innerHTML = `<li class="${liClass}"><p class="${pClass}">` + message + '</p></li>';
+                const content = `<p class="${pClass}">${message}</p>`
+                const innerHTML = `<li class="${liClass}">` + content + '</li>';
                 addToHistory(innerHTML);
+            }
+
+            function addQRCodeToHistory(link) {
+                console.log('addQRCodeToHistory', link);
+                var opts = {
+                    errorCorrectionLevel: 'H',
+                    type: 'image/jpeg',
+                    quality: 0.3,
+                    margin: 0,
+                    width: 200,
+                    color: {
+                        dark:"#010599FF",
+                        light:"#FFBF60FF"
+                    }
+                }
+
+                QRCode.toDataURL(link, opts, function (error, url) {
+                    if (error) console.error(error)
+                    else {
+                        console.log('success!');
+                        const innerHTML = `<li class="entry bot"><img class="qrcode" id="qrcode" src="${url}" /></li>`;
+                        addToHistory(innerHTML);
+                    }
+                });
             }
 
             function makeHTMLMessage(text) {
@@ -92,12 +94,23 @@
                 chatInput.value = '';
             }
 
+            function makeManifestLink(manifest, sharedPrivateKey) {
+                return gatewayAddress + "bzz:/" + manifest + '/?' + sharedPrivateKey;
+            }
+
+            function getLinkHash(pathname) {
+                if (pathname.indexOf("/bzz:/") === 0) {
+                    return pathname.slice(6).replace("/", "");
+                }
+                return pathname;
+            }
+
             function setLink(manifest, sharedPrivateKey) {
-                var linkInput = document.getElementById("linkInput");
-                var manifestLink = gatewayAddress + "bzz:/" + manifest + '/?' + sharedPrivateKey;
-                linkInput.value = manifestLink;
-                var copyButton = document.getElementById("copyButton");
-                copyButton.disabled = false;
+                // var linkInput = document.getElementById("linkInput");
+                // var manifestLink = makeManifestLink(manifest, sharedPrivateKey);
+                // linkInput.value = manifestLink;
+                // var copyButton = document.getElementById("copyButton");
+                // copyButton.disabled = false;
             }
 
             function submitOnEnter(event) {
@@ -113,19 +126,24 @@
                 document.getElementById("debug").style.display = debug;
                 console.log('location', {location: window.location});
                 gatewayAddress = location.origin + "/";
+
+                addMessageToHistory('welcome to SwapChat!', false, true);
+                addMessageToHistory('generating link...', false, true);
+
                 init(gatewayAddress, function(msg) {
                     console.log('messageCallback', msg);
                     addMessageToHistory(msg.payload(), false, false);
                 }, function(manifest, sharedPrivateKey) {
                     setLink(manifest, sharedPrivateKey);
-                    addMessageToHistory('welcome to SwapChat!', false, true);
+                    var linkHash = getLinkHash(window.location.pathname);
+                    var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
+                    addMessageToHistory(manifestLink, false, true);
+                    addQRCodeToHistory(manifestLink);
                     addMessageToHistory('<a onclick="">click to copy your link...</a>', false, true);
                 },
                 function() {
                     console.log('stateCallback');
                     addMessageToHistory('other user has connected...', false, true);
-                    link("none");
-                    // changeMode();
                 });
             }
         </script>
@@ -194,6 +212,11 @@ html, body{
     display: none;
 }
 
+.qrcode {
+    width: 200;
+    height: 200;
+}
+
 .copyButton {
     font-size: 3vh;
 }
@@ -235,10 +258,10 @@ html, body{
 p.message {
     display: flex;
     flex-direction: row;
-    align-items: flex-end;
+    align-items: center;
     padding: 2.3vh;
     background-color: #ddd;
-    border-radius: 1vh;
+    border-radius: 2.3vh;
     max-width: 70%;
     margin: 0.2vh;
     font-size: 3.2vh;
@@ -246,7 +269,7 @@ p.message {
 p.message.your {
     border-bottom-left-radius: 0px;
     margin-left: 10;
-    color: darkgrey;
+    color: rgb(109, 108, 108);
 }
 p.message.mine {
     background-color: #006DF0;
@@ -267,10 +290,14 @@ p.status {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
+    justify-content: center;
     max-width: 100%;
 }
+.entry.your {
+    justify-content: flex-start;
+}
 .entry.mine {
-    flex-direction: row-reverse;
+    justify-content: flex-end;
 }
 ul.history {
     list-style: none;
@@ -420,30 +447,14 @@ input.nostyle {
                 <p>SwapChat</p>
             </div>
 
-            <div id="link" class="container">
-                <div class="inputContainer">
-                    <input
-                        id="linkInput"
-                        type="text"
-                        value="Waiting for manifest..."
-                        class="link"
-                        readonly
-                    />
-                    <button id="copyButton" class="copyButton" onclick="copyToClipboard()" disabled>Copy link to clipboard</button>
-                </div>
-                <div id="loader" class="loader"></div>
-            </div>
-
             <div id="chat" class="chat">
                 <ul class="history" id="history"></ul>
                 <div class="write">
                     <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
                     <div class="sendcontainer-desktop">
-                        <!-- <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/> -->
                         <button class="sendButton" onclick="sendMessage()">Send &uarr;</button>
                     </div>
                     <div class="sendcontainer">
-                        <!-- <img id="send" class="send" src="images/send-message-button.png" alt="Send" title="Send" onclick="sendMessage()"/> -->
                         <button class="sendButton" onclick="sendMessage()">&uarr;</button>
                     </div>
                 </div>
