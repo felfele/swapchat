@@ -68,12 +68,26 @@
                 addToHistory(innerHTML);
             }
 
+            function makeHTMLMessage(text) {
+                var urlExpression = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
+                var regex = new RegExp(urlExpression);
+                var urlMatch = text.match(urlExpression);
+                if (urlMatch) {
+                    var link = urlMatch[0];
+                    var a = '<a href="' + link + '">' + urlMatch[0] + '</a>';
+                    var replacedLink = text.replace(link, a);
+                    return replacedLink;
+                }
+                return text;
+            }
+
             function sendMessage() {
                 var chatInput = document.getElementById("chatinput");
                 console.log(chatInput);
                 var text = chatInput.value;
                 if(text === "") return false;
-                addMessageToHistory(text, true, false);
+                var html = makeHTMLMessage(text);
+                addMessageToHistory(html, true, false);
                 send(text);
                 chatInput.value = '';
             }
