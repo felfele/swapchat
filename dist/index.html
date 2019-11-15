@@ -91,11 +91,11 @@
                 var chatInput = document.getElementById("chatinput");
                 console.log(chatInput);
                 var text = chatInput.value;
+                chatInput.value = '';
                 if(text === "") return false;
                 var html = makeHTMLMessage(text);
                 addMessageToHistory(html, true, false);
                 send(text);
-                chatInput.value = '';
             }
 
             function makeManifestLink(manifest, sharedPrivateKey) {
@@ -143,7 +143,7 @@
                     var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
                     // addMessageToHistory(manifestLink, false, true);
                     addQRCodeToHistory(manifestLink);
-                    addMessageToHistory('<a onclick="copyToClipboard()">click to copy your link...</a>', false, true);
+                    addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', false, true);
                 },
                 function() {
                     console.log('stateCallback');
