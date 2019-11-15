@@ -47,6 +47,10 @@
             }
 
             function addQRCodeToHistory(link) {
+                var input = '<input id="linkInput" type="text" value="' + link + '" class="link" readonly />';
+                var li = '<li class="entry bot">' + input + '</li>';
+                addToHistory(li);
+
                 console.log('addQRCodeToHistory', link);
                 var opts = {
                     errorCorrectionLevel: 'H',
@@ -137,9 +141,9 @@
                     setLink(manifest, sharedPrivateKey);
                     var linkHash = getLinkHash(window.location.pathname);
                     var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
-                    addMessageToHistory(manifestLink, false, true);
+                    // addMessageToHistory(manifestLink, false, true);
                     addQRCodeToHistory(manifestLink);
-                    addMessageToHistory('<a onclick="">click to copy your link...</a>', false, true);
+                    addMessageToHistory('<a onclick="copyToClipboard()">click to copy your link...</a>', false, true);
                 },
                 function() {
                     console.log('stateCallback');
@@ -209,7 +213,6 @@ html, body{
 .link {
     font-size: 3vh;
     width: 80%;
-    display: none;
 }
 
 .qrcode {
