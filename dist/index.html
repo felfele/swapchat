@@ -136,7 +136,7 @@
 
                 init(gatewayAddress, function(msg) {
                     console.log('messageCallback', msg);
-                    addMessageToHistory(msg.payload(), false, false);
+                    addMessageToHistory(makeHTMLMessage(msg.payload()), false, false);
                 }, function(manifest, sharedPrivateKey) {
                     setLink(manifest, sharedPrivateKey);
                     var linkHash = getLinkHash(window.location.pathname);
