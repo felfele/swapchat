@@ -5,6 +5,7 @@ import { pubKeyToAddress, hash } from '@erebos/keccak256';
 import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings';
 
 const ec = require('eccrypto');
+const kck = require('keccak');
 
 /////////////////////////////////
 // HEADER SCRIPT
@@ -37,7 +38,23 @@ function getTmpPrivKey(): string | undefined {
 let GATEWAY_URL = 'http://localhost:8500';
 const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
-const MAXCONNECTIONPOLLS = 7;
+
+// creates the key to a particular feed update chunk, fetchaable with bzz-feed-raw://
+function feedToReference(user: string, topic: string, tim:number, level: number):string {
+	let b = new ArrayBuffer(20+32+7+1);
+	let f = new Uint8Array(b);
+	let v = new DataView(b);
+	f.set(hexToArray(topic), 0);
+	f.set(hexToArray(user), 32);
+	v.setUint32(20+32, tim, true);
+	v.setUint8(20+32+7, level);
+	console.log(b);
+	let h = kck("keccak256");
+	h.update(Buffer.from(b));
+	let d = h.digest();
+	let a = new Uint8Array(d);
+	return arrayToHex(a);
+}
 
 // creates a date string in format 0000-00-00T00:00:00+00:00
 function createManifestDate(timestamp?:number):string {
@@ -239,12 +256,10 @@ class ChatSession {
 	_lastHashSelf: string = ZEROHASH	// previous hash from own posts
 	_lastHashOther: string = ZEROHASH	// previous hash from peer's posts
 	_serial: number = 0			// increments on every message post (includes ping loop)
-	//_ready: boolean = true			// false while in process of sending messages
 	_bzz: BzzAPI				// swarm transport api object
 	_userMe: string				// own user, who signs posts
 	_userOther: string			// peer user, from whom we receive messages
-	_topicMe: string			// topic (function of user of peer)
-	_topicOther: string			// topic (function of own user)
+	_topic: string				// topic of chat feeds
 	_secret: string				// key to encrypt payloads with
 	_outCrypt:any				// output symmetric crypter
 	_inCrypt:any				// output symmetric crypter
@@ -258,9 +273,6 @@ class ChatSession {
 		const signBytes = signer;
 		this._bzz = new BzzAPI({ url: url, signBytes });
 		this._userMe = userMe;
-		this._topicOther = getFeedTopic({
-			name: this.userToTopic(this._userMe)
-		});
 		this._messageCallback = messageCallback;
 	}
 
@@ -319,9 +331,12 @@ class ChatSession {
 		}
 		this._secret = secret;
 		this._userOther = userOther;
-		this._topicMe = getFeedTopic({
-			name: this.userToTopic(this._userOther)
-		});
+		let b = new ArrayBuffer(32);
+		let t = new Uint8Array(b);
+		t.set(hexToArray(secret));
+		let h = kck("keccak256");
+		h.update(Buffer.from(b));	
+		this._topic = "0x" + arrayToHex(h.digest());
 		this.ping();
 		this.poll();
 	}
@@ -330,10 +345,9 @@ class ChatSession {
 	private ping = async () => {
 		if (this._running) {
 			let msg = this.newMessage();
-			//this.sendMessage(msg);
 			const feedOptions = {
 				user: this._userMe,
-				topic: this._topicMe,
+				topic: this._topic,
 			}
 			let r = await this._bzz.setFeedContent(feedOptions, this._lastHashSelf);
 			console.log("ping res: " + r);
@@ -348,8 +362,7 @@ class ChatSession {
 		let bz = this._bzz;
 		let p = undefined;
 		try {
-			let r = await downloadFromFeed(bz, this._userOther, this._topicOther);
-			//let p = this._inCrypt.decrypt(t);
+			let r = await downloadFromFeed(bz, this._userOther, this._topic);
 			p = await r.text();
 		} catch (e) {
 			console.log('downloadFromFeed', e);
@@ -362,9 +375,6 @@ class ChatSession {
 			return;
 		}
 
-		//let currentHash = msg._lastHashSelf;
-		//currentHash = msg._lastHashSelf;
-		//messages.push(msg);
 		let currentHash = p;
 		console.log("Got feed message with hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
 
