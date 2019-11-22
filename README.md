@@ -1,32 +1,30 @@
-Install everything:
+# SwapChat
+
+SwapChat is a disposable, end-to-end encrypted, decentralized web app built on [Swarm](https://swarm.ethereum.org/). It uses ephemeral identities generated on the fly and then it does a Diffie-Hellman key exchange to create a shared secret for reasonable security and privacy.
+
+[<img src="screenshot.png" width=400>](screenshot.png)
+
+### Building the app
+```
+ $ npm run pack
+```
+
+This builds the app in the `dist` directory. You can upload it to Swarm with the `upload.sh` command:
 
 ```
- $ npm install
+ $ ./upload.sh https://swarm-gateways.net
 ```
-
-Build the Javascript bundle
-
-```
- $ npx webpack
-```
-
-Now you can open `dist/index.html` in the browser.
-
-Or you can run it from the command
-
-```
- $ npm start
-```
+You can specify any Swarm gateways as an argument. After the upload was successful the script will write out a link to the uploaded website. Copy that link to your browser to open it.
 
 ## TESTING
 
 In the main script the following constants can be found:
 
 ```
-const AUTHORUSER = "beefc6472de3bba1d389ad8b18348c3df50d680c"; 
+const AUTHORUSER = "beefc6472de3bba1d389ad8b18348c3df50d680c";
 const SCRIPTFEEDTOPIC = "646973706f636861745f73637269707400000000000000000000000000000000"; // name = dispochat_script
-const SCRIPTFEEDHASH = "c8b0051d921ae84f1676a24eaa7d509302dfbd9902dea17fbebe9e004a4a119b"; 
-const HTMLFEEDTOPIC = "646973706f636861745f68746d6c000000000000000000000000000000000000"; // name = dispochat_main, topic 
+const SCRIPTFEEDHASH = "c8b0051d921ae84f1676a24eaa7d509302dfbd9902dea17fbebe9e004a4a119b";
+const HTMLFEEDTOPIC = "646973706f636861745f68746d6c000000000000000000000000000000000000"; // name = dispochat_main, topic
 const HTMLFEEDHASH = "4dce80c0210b318db31094a1e7c694179b24ac22b56f25d44582800f0ca07706";
 ```
 
