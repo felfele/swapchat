@@ -1,11 +1,8 @@
-import { getFeedTopic } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
-import { FEEDMIME, SCRIPTFEEDTOPIC, HTMLFEEDTOPIC, AUTHORUSER } from './settings';
 
 const ec = require('eccrypto');
-const kck = require('keccak');
 
 /////////////////////////////////
 // HEADER SCRIPT
@@ -35,7 +32,6 @@ function getTmpPrivKey(): string | undefined {
 //
 // everything below here must be immutable and usable for both requester and responder
 // the compiled version of it will be used in the script generation for the responser
-let GATEWAY_URL = 'http://localhost:8500';
 const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
 
@@ -49,106 +45,11 @@ function feedToReference(user: string, topic: string, tim:number, level: number)
 	v.setUint32(20+32, tim, true);
 	v.setUint8(20+32+7, level);
 	console.log(b);
-	let h = kck("keccak256");
-	h.update(Buffer.from(b));
-	let d = h.digest();
-	let a = new Uint8Array(d);
-	return arrayToHex(a);
-}
-
-// creates a date string in format 0000-00-00T00:00:00+00:00
-function createManifestDate(timestamp?:number):string {
-	if (timestamp === undefined) {
-		timestamp = Date.now();
-	}
-	const ourDate = new Date(timestamp);
-	let dateString = ourDate.toISOString().substring(0, "0000-00-00T00:00:00".length);
-	const timeZone = ourDate.getTimezoneOffset();
-	if (timeZone < 0) {
-		dateString += '+';
-	} else {
-		dateString += '-';
-	}
-	const tzHours = Math.abs(Math.floor(ourDate.getTimezoneOffset() / 60));
-	const hoursString = tzHours.toString();
-	if (hoursString.length == 1) {
-		dateString += "0";
-	}
-	dateString += hoursString + ":";
-	const tzMinutes = ourDate.getTimezoneOffset() % 60;
-	const minutesString = tzMinutes.toString();
-	if (minutesString.length == 1) {
-		dateString += "0";
-	}
-	dateString += minutesString;
-	return dateString;
-}
-
-// varHash is the hash of the HEADER SCRIPT section above
-// size is the byte size of the contents of the header script
-function createManifest(varHash:string, size:number):string {
-	const dateString = createManifestDate();
-	const dateStringZero = "0001-01-01T00:00:00Z";
-	let o = {entries: [
-		{
-			hash: varHash,
-			path: "head.js",
-			contentType: 'application/json',
-			mode: 420,
-			size: size,
-			mod_time: dateString,
-		},
-		{
-			path: "index.js",
-			contentType: FEEDMIME,
-			mod_time: dateStringZero,
-			feed: {
-				user: "0x" + AUTHORUSER,
-				topic: "0x" + SCRIPTFEEDTOPIC,
-			}
-		},
-		{
-			path: "index.html",
-			contentType: FEEDMIME,
-			mod_time: dateStringZero,
-			feed: {
-				user: "0x" + AUTHORUSER,
-				topic: "0x" + HTMLFEEDTOPIC,
-			}
-		},
-		{
-			contentType: FEEDMIME,
-			mod_time: dateStringZero,
-			feed: {
-				user: "0x" + AUTHORUSER,
-				topic: "0x" + HTMLFEEDTOPIC,
-			}
-		}
-	]};
-	return JSON.stringify(o);
+	let d = hash(Buffer.from(b));
+	return arrayToHex(d);
 }
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
-// TODO: generate webpage on swarm. we only need to post the header script, then fake a manifest which links the application html and main script
-function publishResponseScript(bz:any, tmpPrivKey:string, manifestCallback: ManifestCallback):Promise<string> {
-	return new Promise((whohoo,doh) => {
-		const headScript = "keyTmpRequestPriv = '" + tmpPrivKey + "';\n";
-		bz.upload(
-			headScript,
-		).then((h) => {
-			const manifest = createManifest(h, headScript.length);
-			bz.upload(
-				manifest,
-			).then((h) => {
-				console.log("published manifest: " + h);
-				manifestCallback(h, privateKeyTmp);
-				whohoo(h);
-			}).catch(doh);
-		}).catch(doh);
-		let keyTmpRequestPriv = undefined;	// the private key of the feed used to inform chat requester about responder user
-		console.log("TODO: upload code to swarm for responder");
-	});
-}
 
 // Represents messages sent between the peers
 // A message without a payload is considered a "ping" message
@@ -334,9 +235,8 @@ class ChatSession {
 		let b = new ArrayBuffer(32);
 		let t = new Uint8Array(b);
 		t.set(hexToArray(secret));
-		let h = kck("keccak256");
-		h.update(Buffer.from(b));	
-		this._topic = "0x" + arrayToHex(h.digest());
+		let h = hash(Buffer.from(b))
+		this._topic = "0x" + arrayToHex(h);
 		this.ping();
 		this.poll();
 	}
@@ -467,14 +367,14 @@ const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
 // the peer
 let keyPairOtherPub = undefined;
 let userOther = undefined;
-export let chatSession = undefined;
+let chatSession = undefined;
 
 // crypto stuff
 function newPrivateKey() {
 	return ec.generatePrivate();
 }
 
-export function hexToArray(data:string):Uint8Array {
+function hexToArray(data:string):Uint8Array {
 	let databuf = new ArrayBuffer(data.length / 2);
 	let uintdata = new Uint8Array(databuf);
 	for (var i = 0; i < uintdata.length; i++) {
@@ -483,7 +383,7 @@ export function hexToArray(data:string):Uint8Array {
 	return uintdata;
 }
 
-export function arrayToHex(data:any):string {
+function arrayToHex(data:any):string {
 	let hexout = '';
 	data.forEach(function(n) {
 		let h = n.toString(16);
