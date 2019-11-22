@@ -1,5 +1,6 @@
 <html>
     <head>
+        <title>SwapChat</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <script src="qrcode.min.js"></script>
         <script src="index.js"></script>
@@ -50,7 +51,6 @@
                 var input = '<input id="linkInput" type="text" value="' + link + '" class="link" readonly />';
                 var li = '<li class="entry bot">' + input + '</li>';
                 addToHistory(li);
-
                 console.log('addQRCodeToHistory', link);
                 var opts = {
                     errorCorrectionLevel: 'H',
@@ -98,8 +98,10 @@
                 send(text);
             }
 
-            function makeManifestLink(manifest, sharedPrivateKey) {
-                return gatewayAddress + "bzz:/" + manifest + '/?' + sharedPrivateKey;
+            function makeManifestLink(linkHash, sharedPrivateKey) {
+                var bzzPart = linkHash !== "/" ? "bzz:/" + linkHash + "/" : "";
+                console.log('makeManifestLink', {bzzPart, linkHash, sharedPrivateKey});
+                return gatewayAddress + bzzPart + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
@@ -107,14 +109,6 @@
                     return pathname.slice(6).replace("/", "");
                 }
                 return pathname;
-            }
-
-            function setLink(manifest, sharedPrivateKey) {
-                // var linkInput = document.getElementById("linkInput");
-                // var manifestLink = makeManifestLink(manifest, sharedPrivateKey);
-                // linkInput.value = manifestLink;
-                // var copyButton = document.getElementById("copyButton");
-                // copyButton.disabled = false;
             }
 
             function submitOnEnter(event) {
@@ -132,16 +126,13 @@
                 gatewayAddress = location.origin + "/";
 
                 addMessageToHistory('welcome to SwapChat!', false, true);
-                addMessageToHistory('generating link...', false, true);
 
                 init(gatewayAddress, function(msg) {
                     console.log('messageCallback', msg);
                     addMessageToHistory(makeHTMLMessage(msg.payload()), false, false);
-                }, function(manifest, sharedPrivateKey) {
-                    setLink(manifest, sharedPrivateKey);
+                }, function(linkHash, sharedPrivateKey) {
                     var linkHash = getLinkHash(window.location.pathname);
                     var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
-                    // addMessageToHistory(manifestLink, false, true);
                     addQRCodeToHistory(manifestLink);
                     addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', false, true);
                 },
@@ -172,6 +163,10 @@ html, body{
     left: 0;
     width: 6vw;
     height: 6vw;
+}
+
+.name {
+    font-size: 4vh;
 }
 
 .mainContainer {
@@ -225,7 +220,7 @@ html, body{
 }
 
 .sendButton {
-    font-size: 20;
+    font-size: 3vh;
     width: 15vw;
     margin-right: 1vw;
     height: 6vh;
@@ -382,7 +377,7 @@ ul.history {
     color: #1a1a1a;
     border: 0;
     outline: none;
-    font-size: 20;
+    font-size: 3vh;
     padding-left: 20px;
 }
 input.nostyle {
@@ -390,6 +385,7 @@ input.nostyle {
     width: 90%;
     padding: 12px 0 12px 0;
     background: transparent;
+    font-size: 3vh;
 }
 .write {
     width: 100%;
@@ -448,7 +444,7 @@ input.nostyle {
                 <button>Mode</button>
             </div>
             <div id="head" class="status-bar style-bg">
-                <p>SwapChat</p>
+                <p class="name">SwapChat</p>
             </div>
 
             <div id="chat" class="chat">
