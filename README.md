@@ -2,7 +2,7 @@
 
 SwapChat is a disposable, end-to-end encrypted, decentralized web app built on [Swarm](https://swarm.ethereum.org/). It uses ephemeral identities generated on the fly and then it does a Diffie-Hellman key exchange to create a shared secret for reasonable security and privacy.
 
-[<img src="screenshot.png" width=400>](screenshot.png)
+[<img src="screenshot.png" width=800>](screenshot.png)
 
 ### Building the app
 ```
