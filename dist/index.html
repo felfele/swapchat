@@ -125,7 +125,7 @@
                 console.log('location', {location: window.location});
                 gatewayAddress = location.origin + "/";
 
-                addMessageToHistory('welcome to SwapChat!', false, true);
+                addMessageToHistory('Welcome to SwapChat!', false, true);
 
                 init(gatewayAddress, function(msg) {
                     console.log('messageCallback', msg);
@@ -138,7 +138,7 @@
                 },
                 function() {
                     console.log('stateCallback');
-                    addMessageToHistory('other user has connected...', false, true);
+                    addMessageToHistory('You are connected...', false, true);
                 });
             }
         </script>
@@ -227,16 +227,6 @@ html, body{
     background: lightgrey;
 }
 
-.loader {
-  border: 16px solid #f3f3f3; /* Light grey */
-  border-top: 16px solid #3498db; /* Blue */
-  border-radius: 50%;
-  width: 60px;
-  height: 60px;
-  animation: spin 2s linear infinite;
-  margin-top: 20;
-}
-
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -260,20 +250,17 @@ p.message {
     padding: 2.3vh;
     background-color: #ddd;
     color: #006DF0;
-    border-radius: 2.3vh;
     max-width: 70%;
     margin: 0.2vh;
     font-size: 3.2vh;
 }
 p.message.your {
-    border-bottom-left-radius: 0px;
     margin-left: 10;
     color: rgb(109, 108, 108);
 }
 p.message.mine {
     background-color: #006DF0;
     color: #fff;
-    border-bottom-right-radius: 0px;
     margin-right: 10;
 }
 p.status {
