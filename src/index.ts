@@ -14,13 +14,13 @@ let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to 
 function getTmpPrivKey(): string | undefined {
 	if (typeof window !== 'undefined' && window != null && window.location != null && window.location.search != null && window.location.search.length > 0) {
 		const key = window.location.search.slice(1);
-		console.log("using tmpPrivKey from browser: " + key);
+		// console.log("using tmpPrivKey from browser: " + key);
 		return key;
 	}
 	// dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
 	if (process.argv.length > 2) {
 		const tmpPrivKey = process.argv[2];
-		console.log("using tmpkey from cli: " + tmpPrivKey);
+		// console.log("using tmpkey from cli: " + tmpPrivKey);
 		return tmpPrivKey;
 	}
 	return undefined;
@@ -421,7 +421,7 @@ const privateKeySelf = "0x" + keyPairSelf.getPrivate("hex");
 const publicKeySelf = "0x" + keyPairSelf.getPublic("hex");
 const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
 
-console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
+// console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
 
 // const privateKeySelf = "0xae402705d028aac6c62ea98a54b5ae763f527c3e14cf84c89a1e4e4ec4d43921";
 // const publicKeySelf = "0x035823ce10d0e06bfc14ff26f50776916fc920c9ce75b5ab8c96e3f395f13d179f";
@@ -429,7 +429,7 @@ console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
 
 const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
 const keyPrivSelf = createHex(privateKeySelf).toBuffer();
-console.log("keyPrivSelf", keyPrivSelf.length);
+// console.log("keyPrivSelf", keyPrivSelf.length);
 
 // the handshake feed
 // const privateKeyTmp = "0x3c35041a11cd5ca8bda7c3aa36c7a8d09d7671977f3055f7d66d6068db5644f8";
@@ -498,7 +498,11 @@ async function uploadToFeed(bz: BzzAPI, user: string, topic: string, data: Uint8
 	} else {
 		h = await bz.upload(Buffer.from(data));
 	}
-	const r = await bz.setFeedContentHash(feedOptions, h);
+	try {
+		const r = await bz.setFeedContentHash(feedOptions, h);
+	} catch (e) {
+		console.error('uploadToFeed', {e});
+	}
 	return h;
 }
 
@@ -585,15 +589,12 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<string> {
-
-	let userOther = undefined;
-
 	const myHash = await uploadToFeed(bzz, userTmp, topicTmp, publicKeySelf);
 	console.log("uploaded to " + myHash);
-	publishResponseScript(bzz, privateKeyTmp, manifestCallback);
+	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const jetzt = Date.now() + 1000;
-		userOther = await checkResponse(myHash, bzz, 0);
+		const userOther = await checkResponse(myHash, bzz, 0);
 		if (userOther !== undefined) {
 			return userOther;
 		}
