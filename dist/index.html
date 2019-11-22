@@ -92,7 +92,13 @@
                 console.log(chatInput);
                 var text = chatInput.value;
                 chatInput.value = '';
-                if(text === "") return false;
+                if (text === "") {
+                    return false;
+                }
+                if (text.indexOf("/help") === 0) {
+                    addMessageToHistory("SwapChat is a disposable chat application. Show the code or send a link to someone so that you can start an end-to-end encrypted chat. Enjoy!", false, true);
+                    return;
+                }
                 var html = makeHTMLMessage(text);
                 addMessageToHistory(html, true, false);
                 send(text);
