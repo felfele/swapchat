@@ -1,8 +1,13 @@
+import { createFeedDigest } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
 
 const ec = require('eccrypto');
+
+const REQUEST_PUBLIC_KEY_INDEX = 0;
+const RESPONSE_PUBLIC_KEY_INDEX = 1;
+
 
 /////////////////////////////////
 // HEADER SCRIPT
@@ -44,7 +49,6 @@ function feedToReference(user: string, topic: string, tim:number, level: number)
 	f.set(hexToArray(user), 32);
 	v.setUint32(20+32, tim, true);
 	v.setUint8(20+32+7, level);
-	console.log(b);
 	let d = hash(Buffer.from(b));
 	return arrayToHex(d);
 }
@@ -151,9 +155,6 @@ const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Prom
 // our feed is our user and function of peer user as topic
 // peer feed is peer user and function of our user as topic
 class ChatSession {
-	_pollattempts: number = 0		// increments of failed poll attempts, may be used to inform client about when consider chat lost
-	_startedAt: number = Date.now();	// time of session start (from perspective of client)
-	_lastAt: number = 0			// previous successful message post (includes ping loop)
 	_lastHashSelf: string = ZEROHASH	// previous hash from own posts
 	_lastHashOther: string = ZEROHASH	// previous hash from peer's posts
 	_serial: number = 0			// increments on every message post (includes ping loop)
@@ -162,8 +163,6 @@ class ChatSession {
 	_userOther: string			// peer user, from whom we receive messages
 	_topic: string				// topic of chat feeds
 	_secret: string				// key to encrypt payloads with
-	_outCrypt:any				// output symmetric crypter
-	_inCrypt:any				// output symmetric crypter
 	_msgPeriod:number = MSGPERIOD
 	_messageCallback:any
 	_debug:boolean = false
@@ -189,10 +188,6 @@ class ChatSession {
 		return createHex(user).toString();
 	}
 
-	public getStarted = (): number => {
-		return this._startedAt;
-	}
-
 	// create a new message from the current state
 	// the creation of new messages will be locked until the message is sent
 	// if locked, undefined will be returned
@@ -216,7 +211,6 @@ class ChatSession {
 		} catch(e) {
 			throw "error uploading msg: " + e
 		}
-		this._lastAt = Date.now();
 		this._lastHashSelf = h;
 		if (this._debug) {
 			console.log("sent message uploaded to " + h);
@@ -331,11 +325,11 @@ const privateKeySelf = "0x" + keyPairSelf.getPrivate("hex");
 const publicKeySelf = "0x" + keyPairSelf.getPublic("hex");
 const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
 
-// console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
-
 // const privateKeySelf = "0xae402705d028aac6c62ea98a54b5ae763f527c3e14cf84c89a1e4e4ec4d43921";
 // const publicKeySelf = "0x035823ce10d0e06bfc14ff26f50776916fc920c9ce75b5ab8c96e3f395f13d179f";
 // const userSelf = "0xa1615832e7196080d058698a8d85b00bbc2a19dd";
+
+console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
 
 const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
 const keyPrivSelf = createHex(privateKeySelf).toBuffer();
@@ -346,7 +340,7 @@ const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // const publicKeyTmp = "0x03f0070f8376b33b3216eaab30f3b12919a4876c2bdf2b21e87754d2f4d75abea1";
 // const userTmp = "0x00c13ab42a8650c29998b0a4bb2cd1906128e7de";
 
-const keyPairTmp = createKeyPair(keyTmpRequestPriv && keyTmpRequestPriv.slice(2));
+const keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
 const privateKeyTmp = "0x" + keyPairTmp.getPrivate("hex");
 const publicKeyTmp = "0x" + keyPairTmp.getPublic("hex");
 const userTmp = pubKeyToAddress(createHex(publicKeyTmp).toBuffer());
@@ -375,6 +369,7 @@ function newPrivateKey() {
 }
 
 function hexToArray(data:string):Uint8Array {
+	data = stripHexPrefix(data);
 	let databuf = new ArrayBuffer(data.length / 2);
 	let uintdata = new Uint8Array(databuf);
 	for (var i = 0; i < uintdata.length; i++) {
@@ -395,25 +390,41 @@ function arrayToHex(data:any):string {
 	return hexout;
 }
 
-async function uploadToFeed(bz: BzzAPI, user: string, topic: string, data: Uint8Array|string): Promise<string> {
+async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, data: Uint8Array|string): Promise<string|undefined> {
 
-	const feedOptions = {
-		user: user,
-		topic: topic,
+	const feedParams = {
+		feed: {
+			user: user,
+			topic: topic,
+		},
+		epoch: {
+			time: index,
+			level: 0,
+		}
 	}
 
-	let h = "";
-	if (typeof data === 'string') {
-		h = await bz.upload(data);
-	} else {
-		h = await bz.upload(Buffer.from(data));
-	}
 	try {
-		const r = await bz.setFeedContentHash(feedOptions, h);
+		const resp = await bzz.postFeedChunk(feedParams, data);
+		const ref = await resp.text();
+		const url = bzz._url + `bzz-feed-raw:/${ref.replace(/"/g, "")}`;
+		await downloadFromRawFeed(bzz, user, topic, index);
+		console.log('uploadToRawFeed', {url});
+		return ref;
 	} catch (e) {
-		console.error('uploadToFeed', {e});
+		console.error('uploadToRawFeed', {e});
 	}
-	return h;
+}
+
+async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
+	const reference = feedToReference(user, topic, index, 0);
+	const url = bzz._url + `bzz-feed-raw:/${reference}`;
+	const nodeFetch = require("node-fetch");
+	const response = await nodeFetch(url) as Response;
+	const dataBuffer = await response.arrayBuffer();
+	const b = Buffer.from(dataBuffer, 68, dataBuffer.byteLength - 65 - 68);
+	const s = b.toString('hex');
+	console.log('downloadFromRawFeed', {user, topic, index, reference, s});
+	return s;
 }
 
 function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
@@ -428,10 +439,10 @@ function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
 }
 
 // if bz is supplied, will update tmp feed
-async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
+async function connectToPeer(handshakeOther:string):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
-	const otherPub = handshakeOther.slice(2);
+	const otherPub = stripHexPrefix(handshakeOther);
 	keyPairOtherPub = createPublic(otherPub);
 	const pubArray = hexToArray(otherPub);
 	const pubBuffer = Buffer.from(pubArray);
@@ -448,36 +459,28 @@ async function connectToPeer(handshakeOther:string, bz:any):Promise<string> {
 
 async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	// NB these are globalsss
-	const otherPub = handshakeOther.slice(2);
-	const pubBuffer = Buffer.from(hexToArray(otherPub));
+	const otherPub = stripHexPrefix(handshakeOther);
+	const pubBuffer = Buffer.from(hexToArray(handshakeOther));
 	keyPairOtherPub = createPublic(otherPub);
 
 	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
-	const myHash = await uploadToFeed(bz, userTmp, topicTmp, publicKeySelf);
+	// const myHash = await uploadToFeed(bz, userTmp, topicTmp, publicKeySelf);
+	const myHash = await uploadToRawFeed(bz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX, publicKeySelf);
+	console.log('connectToPeerTwo', {handshakeOther, userOther})
 	await chatSession.start(userOther, secret);
 	return userOther;
 }
 
-async function checkResponse(myHash:string, bz:any, attempts:number):Promise<string> {
+async function checkResponse(bzz: BzzAPI, attempts:number):Promise<string|undefined> {
 	try {
-		const r = await downloadFromFeed(bz, userTmp, topicTmp);
-		const currentHash = r.url.substring(r.url.length-65, r.url.length-1);
-		if (currentHash !== myHash) {
-
-			// catch potential delayed stream reads
-			if (keyPairOtherPub !== undefined) {
-				return;
-			}
-
-			const handshakeOther = await r.text();
-			const userOther = await connectToPeer(handshakeOther, undefined);
-			return userOther;
-		}
+		const handshakeOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		const userOther = await connectToPeer(handshakeOther);
+		return userOther;
 	} catch (e) {
-		console.log('checkResponse', e);
+		return undefined;
 	}
 }
 
@@ -498,32 +501,61 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<string> {
-	const myHash = await uploadToFeed(bzz, userTmp, topicTmp, publicKeySelf);
-	console.log("uploaded to " + myHash);
+async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<void> {
+	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const jetzt = Date.now() + 1000;
-		const userOther = await checkResponse(myHash, bzz, 0);
+		const userOther = await checkResponse(bzz, 0);
 		if (userOther !== undefined) {
-			return userOther;
+			return;
 		}
 		await waitUntil(jetzt);
 	}
 }
 
 async function startResponse(bzz: BzzAPI):Promise<string> {
-	const r = await downloadFromFeed(bzz, userTmp, topicTmp);
-	const handshakePubOther = await r.text();
+	// const r = await downloadFromFeed(bzz, userTmp, topicTmp);
+	// const handshakePubOther = await r.text();
+	const handshakePubOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
 	console.log('handshakePubOther', handshakePubOther);
 	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
 	return userOther;
 }
 
+
+const newSession = (gatewayAddress: string, messageCallback: any) => {
+	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerSelf });
+	let writeIndex = 0;
+	let readIndex = 0;
+	const poll = async (userOther: string) => {
+		try {
+			console.log('poll', userOther, readIndex);
+			const r = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+			readIndex += 1;
+			messageCallback({
+				payload: () => new TextDecoder().decode(hexToArray(r)),
+			});
+		} catch (e) {
+		}
+		setTimeout(poll, 1000, userOther);
+	}
+	return {
+		sendMessage: async (message: string) => {
+			const r = await uploadToRawFeed(bzz, userSelf, ZEROHASH, writeIndex, message);
+			writeIndex += 1;
+		},
+		start: async (userOther: string, secret: string) => {
+			await poll(userOther);
+		}
+	}
+}
+
 export function init(gatewayAddress: string, messageCallback:any, manifestCallback: ManifestCallback, stateCallback:any) {
 	console.log('init called');
 	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerTmp });
-	chatSession = new ChatSession(gatewayAddress, userSelf, signerSelf, messageCallback);
+	// chatSession = new ChatSession(gatewayAddress, userSelf, signerSelf, messageCallback);
+	chatSession = newSession(gatewayAddress, messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		console.log('start request');
 		startRequest(bzz, manifestCallback).then((v) => {
@@ -532,7 +564,7 @@ export function init(gatewayAddress: string, messageCallback:any, manifestCallba
 			console.error("error starting request: ", e);
 		});
 	} else {
-		chatSession.setDebug();
+		// chatSession.setDebug();
 		startResponse(bzz).then((v) => {
 			stateCallback();
 		}).catch((e) => {
@@ -543,9 +575,10 @@ export function init(gatewayAddress: string, messageCallback:any, manifestCallba
 
 export function send(message: string) {
 	try {
-		let msg = chatSession.newMessage();
-		msg.setPayload(message);
-		chatSession.sendMessage(msg);
+		// let msg = chatSession.newMessage();
+		// msg.setPayload(message);
+		// chatSession.sendMessage(msg);
+		chatSession.sendMessage(message);
 	} catch(e) {
 		console.error(e);
 	}
