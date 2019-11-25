@@ -1,4 +1,3 @@
-import { createFeedDigest } from '@erebos/api-bzz-base';
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
@@ -390,7 +389,7 @@ function arrayToHex(data:any):string {
 	return hexout;
 }
 
-async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, data: Uint8Array|string): Promise<string|undefined> {
+async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<string|undefined> {
 
 	const feedParams = {
 		feed: {
@@ -407,7 +406,6 @@ async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: 
 		const resp = await bzz.postFeedChunk(feedParams, data);
 		const ref = await resp.text();
 		const url = bzz._url + `bzz-feed-raw:/${ref.replace(/"/g, "")}`;
-		await downloadFromRawFeed(bzz, user, topic, index);
 		console.log('uploadToRawFeed', {url});
 		return ref;
 	} catch (e) {
@@ -467,7 +465,6 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
 	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
-	// const myHash = await uploadToFeed(bz, userTmp, topicTmp, publicKeySelf);
 	const myHash = await uploadToRawFeed(bz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX, publicKeySelf);
 	console.log('connectToPeerTwo', {handshakeOther, userOther})
 	await chatSession.start(userOther, secret);
@@ -505,18 +502,16 @@ async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Pro
 	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
-		const jetzt = Date.now() + 1000;
+		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(bzz, 0);
 		if (userOther !== undefined) {
 			return;
 		}
-		await waitUntil(jetzt);
+		await waitUntil(nextCheckTime);
 	}
 }
 
 async function startResponse(bzz: BzzAPI):Promise<string> {
-	// const r = await downloadFromFeed(bzz, userTmp, topicTmp);
-	// const handshakePubOther = await r.text();
 	const handshakePubOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
 	console.log('handshakePubOther', handshakePubOther);
 	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
@@ -529,20 +524,28 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	let writeIndex = 0;
 	let readIndex = 0;
 	const poll = async (userOther: string) => {
-		try {
-			console.log('poll', userOther, readIndex);
-			const r = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
-			readIndex += 1;
-			messageCallback({
-				payload: () => new TextDecoder().decode(hexToArray(r)),
-			});
-		} catch (e) {
+		while (true) {
+			try {
+				console.log('poll', userOther, readIndex);
+				const messageReference = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				const response = await bzz.download(messageReference, {mode: 'raw'});
+				const message = await response.text();
+				readIndex += 1;
+				messageCallback({
+					payload: () => message,
+				});
+			} catch (e) {
+				break;
+			}
 		}
 		setTimeout(poll, 1000, userOther);
 	}
 	return {
 		sendMessage: async (message: string) => {
-			const r = await uploadToRawFeed(bzz, userSelf, ZEROHASH, writeIndex, message);
+			const messageReference = await bzz.upload(message);
+			console.log('sendMessage', {messageReference});
+			const messageReferenceBytes = Buffer.from(hexToArray(messageReference))
+			const r = await uploadToRawFeed(bzz, userSelf, ZEROHASH, writeIndex, messageReferenceBytes);
 			writeIndex += 1;
 		},
 		start: async (userOther: string, secret: string) => {
@@ -575,9 +578,6 @@ export function init(gatewayAddress: string, messageCallback:any, manifestCallba
 
 export function send(message: string) {
 	try {
-		// let msg = chatSession.newMessage();
-		// msg.setPayload(message);
-		// chatSession.sendMessage(msg);
 		chatSession.sendMessage(message);
 	} catch(e) {
 		console.error(e);
