@@ -4,5 +4,10 @@ module.exports = {
 	},
 	output: {
 		libraryTarget: 'window'
-	}
+	},
+	mode: 'production',
+	performance: {
+		hints: false
+	},
+	stats: 'errors-only',
 };
