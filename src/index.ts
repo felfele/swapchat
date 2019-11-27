@@ -1,8 +1,7 @@
 import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
-
-const ec = require('eccrypto');
+import * as ec from 'eccrypto';
 
 /////////////////////////////////
 // HEADER SCRIPT
