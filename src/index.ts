@@ -413,9 +413,10 @@ async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: 
 	}
 }
 
-async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
+async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, timeout?: number): Promise<string> {
 	const reference = feedToReference(user, topic, index, 0);
-	const url = bzz._url + `bzz-feed-raw:/${reference}`;
+	const timeoutQuery = timeout != null ? `?timeout=${timeout}` : '';
+	const url = bzz._url + `bzz-feed-raw:/${reference}${timeoutQuery}`;
 	const nodeFetch = require("node-fetch");
 	const response = await nodeFetch(url) as Response;
 	const dataBuffer = await response.arrayBuffer();
@@ -527,7 +528,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		while (true) {
 			try {
 				console.log('poll', userOther, readIndex);
-				const messageReference = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				const messageReference = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex, 60 * 1000);
 				const response = await bzz.download(messageReference, {mode: 'raw'});
 				const message = await response.text();
 				readIndex += 1;
