@@ -1,4 +1,0 @@
-export const FEEDMIME = 'application/bzz-feed';
-export const SCRIPTFEEDTOPIC = "646973706f636861745f73637269707400000000000000000000000000000000"; // name = dispochat_script
-export const HTMLFEEDTOPIC = "646973706f636861745f68746d6c000000000000000000000000000000000000"; // name = dispochat_main, topic
-export const AUTHORUSER = "5660eb1fc0fa1abc2bef8d50fe7a2e094490d501";
