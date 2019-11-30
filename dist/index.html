@@ -1,7 +1,7 @@
 <html>
     <head>
         <title>SwapChat</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
         <script src="qrcode.min.js"></script>
         <script src="index.js"></script>
         <script>
@@ -128,6 +128,7 @@
                 var debug = window.location.search.indexOf('debug') > 0 ? "block" : "none";
                 console.log('onLoad', debug, window.location.search);
                 document.getElementById("debug").style.display = debug;
+
                 console.log('location', {location: window.location});
                 gatewayAddress = location.origin + "/";
 
@@ -145,6 +146,7 @@
                 function() {
                     console.log('stateCallback');
                     addMessageToHistory('You are connected...', false, true);
+                    document.getElementById("chatinput").focus();
                 });
             }
         </script>
@@ -160,6 +162,7 @@ html, body{
     margin: 0;
     padding: 0;
     overflow: hidden;
+    position: fixed;
 }
 
 .debug {
@@ -172,15 +175,16 @@ html, body{
 }
 
 .name {
-    font-size: 4vh;
+    font-size: 4vmax;
 }
 
 .mainContainer {
     height: 100%;
-    flex: 1;
+    flex: 1 0 auto;
     display: flex;
     flex-direction: column;
     justify-content: stretch;
+    position: fixed;
 }
 
 .container {
@@ -212,7 +216,7 @@ html, body{
 }
 
 .link {
-    font-size: 3vh;
+    font-size: 3vmax;
     width: 80%;
 }
 
@@ -222,14 +226,14 @@ html, body{
 }
 
 .copyButton {
-    font-size: 3vh;
+    font-size: 3vmax;
 }
 
 .sendButton {
-    font-size: 3vh;
+    font-size: 3vmax;
     width: 15vw;
     margin-right: 1vw;
-    height: 6vh;
+    height: 6vmax;
     background: lightgrey;
 }
 
@@ -253,12 +257,12 @@ p.message {
     display: flex;
     flex-direction: row;
     align-items: center;
-    padding: 2.3vh;
+    padding: 2.3vmax;
     background-color: #ddd;
     color: #006DF0;
     max-width: 70%;
-    margin: 0.2vh;
-    font-size: 3.2vh;
+    margin: 0.2vmax;
+    font-size: 3.2vmax;
 }
 p.message.your {
     margin-left: 10;
@@ -273,7 +277,7 @@ p.status {
     display: flex;
     flex-direction: row;
     align-items: flex-end;
-    padding: 0.3vh;
+    padding: 0.3vmax;
     max-width: 70%;
     font-size: 90%;
     color: lightgrey;
@@ -311,78 +315,46 @@ ul.history {
 #head {
     width: 100%;
     transition: all 0.333s ease-in-out;
-    font-size: 3vh;
+    font-size: 3vmax;
     padding-left: 20;
     padding-top: 36px;
     padding-left: 30;
     font-size: 30;
 }
 .style-bg {
-    height: 6vh;
+    height: 6vmax;
     background: #006DF0;
     color: white;
     overflow:hidden;
 }
 #chatname {
-    margin-top: 1.5vh;
+    margin-top: 1.5vmax;
     margin-left: 40%;
-    height: 6vh;
-}
-.back {
-    min-width: 3vh;
-    min-height: 3vh;
-    width: 3vh;
-    height: 3vh;
-    cursor: pointer;
-    margin-top: 1.5vh;
-}
-.next {
-    min-width: 1.5vh;
-    min-height: 1.5vh;
-    width: 1.5vh;
-    height: 1.5vh;
-    cursor: pointer;
-    margin-left: 0.5vh;
-    margin-top: 2vh;
-}
-#loginform input {
-    float: left;
-    width: 80%;
-    height: 6vh;
-    margin-left: 10%;
-    margin-top: 1vh;
-    padding: 2vh 1vh;
-    color: #1a1a1a;
-    border: 0;
-    outline: none;
-    background-color: lightgrey;
-}
-#loginform input.login {
-    background-color: #006DF0;
-    color: white;
+    height: 6vmax;
 }
 .write input {
     float: left;
     width: 75%;
-    height: 6vh;
-    margin-top: 1vh;
-    padding: 2vh 0.5vh;
+    height: 6vmax;
+    margin-top: 1vmax;
+    padding: 2vmax 0.5vmax;
     color: #1a1a1a;
     border: 0;
     outline: none;
-    font-size: 3vh;
+    font-size: 3vmax;
     padding-left: 20px;
+    border-radius: 0;
 }
 input.nostyle {
     border: 0;
     width: 90%;
     padding: 12px 0 12px 0;
     background: transparent;
-    font-size: 3vh;
+    font-size: 3vmax;
 }
 .write {
     width: 100%;
-    height: 8vh;
+    height: 8vmax;
     margin-left: 30px;
     margin-bottom: 17px;
     margin-top: 14px;
@@ -403,8 +375,8 @@ input.nostyle {
 
 
 .send {
-    width: 4vh;
-    height: 4vh;
+    width: 4vmax;
+    height: 4vmax;
     cursor: pointer;
     display:table-cell;
     vertical-align:middle;
@@ -450,6 +422,7 @@ input.nostyle {
                     <div class="sendcontainer">
                         <button class="sendButton" onclick="sendMessage()">&uarr;</button>
                     </div>
+
                 </div>
             </div>
         </div>
