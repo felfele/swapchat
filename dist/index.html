@@ -57,7 +57,7 @@
                     type: 'image/jpeg',
                     quality: 0.3,
                     margin: 0,
-                    width: 200,
+                    width: 300,
                     color: {
                         dark:"#010599FF",
                         light:"#FFBF60FF"
@@ -145,6 +145,7 @@
                 function() {
                     console.log('stateCallback');
                     addMessageToHistory('You are connected...', false, true);
+                    document.getElementById("chatinput").focus();
                 });
             }
         </script>
@@ -217,8 +218,8 @@ html, body{
 }
 
 .qrcode {
-    width: 200;
-    height: 200;
+    width: 300;
+    height: 300;
 }
 
 .copyButton {
@@ -307,21 +308,6 @@ ul.history {
 }
 .history {
     margin: 0 auto;
-}
-#head {
-    width: 100%;
-    transition: all 0.333s ease-in-out;
-    font-size: 3vh;
-    padding-left: 20;
-    padding-top: 36px;
-    padding-left: 30;
-    font-size: 30;
-}
-.style-bg {
-    height: 6vh;
-    background: #006DF0;
-    color: white;
-    overflow:hidden;
 }
 #chatname {
     margin-top: 1.5vh;
@@ -435,9 +421,6 @@ input.nostyle {
         <div class="mainContainer">
             <div id="debug" class="debug" onclick="changeMode()">
                 <button>Mode</button>
-            </div>
-            <div id="head" class="status-bar style-bg">
-                <p class="name">SwapChat</p>
             </div>
 
             <div id="chat" class="chat">
