@@ -6,7 +6,7 @@ import * as ec from 'eccrypto';
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
 
-
+let log = console.log;
 /////////////////////////////////
 // HEADER SCRIPT
 /////////////////////////////////
@@ -415,6 +415,7 @@ async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: 
 async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
 	const reference = feedToReference(user, topic, index, 0);
 	const url = bzz._url + `bzz-feed-raw:/${reference}`;
+	log('downloadFromRawFeed', {url});
 	const nodeFetch = require("node-fetch");
 	const response = await nodeFetch(url) as Response;
 	const dataBuffer = await response.arrayBuffer();
@@ -553,24 +554,31 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	}
 }
 
-export function init(gatewayAddress: string, messageCallback:any, manifestCallback: ManifestCallback, stateCallback:any) {
-	console.log('init called');
-	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerTmp });
-	// chatSession = new ChatSession(gatewayAddress, userSelf, signerSelf, messageCallback);
-	chatSession = newSession(gatewayAddress, messageCallback);
+export function init(params: {
+	gatewayAddress: string,
+	messageCallback: any,
+	manifestCallback: ManifestCallback,
+	stateCallback: any,
+	logFunction: (...args: any[]) => void,
+}) {
+	log = params.logFunction;
+	log('init called');
+	const bzz = new BzzAPI({ url: params.gatewayAddress, signBytes: signerTmp });
+	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
-		console.log('start request');
-		startRequest(bzz, manifestCallback).then((v) => {
-			stateCallback();
+		log('start request');
+		startRequest(bzz, params.manifestCallback).then((v) => {
+			params.stateCallback();
 		}).catch((e) => {
 			console.error("error starting request: ", e);
+			log("error starting request: ", e);
 		});
 	} else {
-		// chatSession.setDebug();
 		startResponse(bzz).then((v) => {
-			stateCallback();
+			params.stateCallback();
 		}).catch((e) => {
 			console.error("error starting response: ", e);
+			log("error starting response: ", e);
 		});
 	}
 }

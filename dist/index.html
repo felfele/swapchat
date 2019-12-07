@@ -2,10 +2,21 @@
     <head>
         <title>SwapChat</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-        <script src="qrcode.min.js"></script>
-        <script src="index.js"></script>
+        <script defer src="qrcode.min.js"></script>
+        <script defer src="index.js"></script>
         <script>
             var gatewayAddress = "https://swarm2.fairdatasociety.org/";
+            var debug = window.location.search.indexOf('debug') > 0;
+
+            function log() {
+                if (debug) {
+                    var args = Array.prototype.slice.call(arguments);
+                    var s = JSON.stringify(args);
+                    addMessageToHistory(s, 'log');
+                }
+                console.log.apply(console, arguments);
+            }
+
             function copyToClipboard() {
                 var input = document.getElementById("linkInput");
                 var range = document.createRange();
@@ -18,7 +29,7 @@
                 input.setSelectionRange(0, 999999); // A big number, to cover anything that could be inside the element.
                 input.readOnly = true;
                 var ret = document.execCommand("copy");
-                console.log(ret);
+                log(ret);
             }
 
             function addToHistory(innerHTML) {
@@ -29,19 +40,9 @@
                 }
             }
 
-            function addMessageToHistory(message, mine, bot) {
-                let liClass = 'entry';
-                let pClass = 'message';
-                if (mine) {
-                    liClass += ' mine';
-                    pClass += ' mine';
-                } else if(bot) {
-                    liClass += ' bot';
-                    pClass += ' bot';
-                } else {
-                    liClass += ' your';
-                    pClass += ' your';
-                }
+            function addMessageToHistory(message, cssClass) {
+                let liClass = 'entry ' + cssClass;
+                let pClass = 'message ' + cssClass;
                 const content = `<p class="${pClass}">${message}</p>`
                 const innerHTML = `<li class="${liClass}">` + content + '</li>';
                 addToHistory(innerHTML);
@@ -51,7 +52,7 @@
                 var input = '<input id="linkInput" type="text" value="' + link + '" class="link" readonly />';
                 var li = '<li class="entry bot">' + input + '</li>';
                 addToHistory(li);
-                console.log('addQRCodeToHistory', link);
+                log('addQRCodeToHistory', link);
                 var opts = {
                     errorCorrectionLevel: 'H',
                     type: 'image/jpeg',
@@ -67,7 +68,7 @@
                 QRCode.toDataURL(link, opts, function (error, url) {
                     if (error) console.error(error)
                     else {
-                        console.log('success!');
+                        log('success!');
                         const innerHTML = `<li class="entry bot"><img class="qrcode" id="qrcode" src="${url}" /></li>`;
                         addToHistory(innerHTML);
                     }
@@ -89,24 +90,24 @@
 
             function sendMessage() {
                 var chatInput = document.getElementById("chatinput");
-                console.log(chatInput);
+                log(chatInput);
                 var text = chatInput.value;
                 chatInput.value = '';
                 if (text === "") {
                     return false;
                 }
                 if (text.indexOf("/help") === 0) {
-                    addMessageToHistory("SwapChat is a disposable chat application. Show the code or send a link to someone so that you can start an end-to-end encrypted chat. Enjoy!", false, true);
+                    addMessageToHistory("SwapChat is a disposable chat application. Show the code or send a link to someone so that you can start an end-to-end encrypted chat. Enjoy!", 'bot');
                     return;
                 }
                 var html = makeHTMLMessage(text);
-                addMessageToHistory(html, true, false);
+                addMessageToHistory(html, 'mine');
                 send(text);
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
                 var bzzPart = linkHash !== "/" ? "bzz:/" + linkHash + "/" : "";
-                console.log('makeManifestLink', {bzzPart, linkHash, sharedPrivateKey});
+                log('makeManifestLink', {bzzPart, linkHash, sharedPrivateKey});
                 return gatewayAddress + bzzPart + "?" + sharedPrivateKey;
             }
 
@@ -123,31 +124,45 @@
                 }
             }
 
+            function removeLoading() {
+                var loading = document.getElementById("loading");
+                if (loading != null) {
+                    loading.parentNode.removeChild(loading);
+                }
+            }
+
             function onLoad() {
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
-                var debug = window.location.search.indexOf('debug') > 0 ? "block" : "none";
-                console.log('onLoad', debug, window.location.search);
-                document.getElementById("debug").style.display = debug;
-
-                console.log('location', {location: window.location});
+                log('onLoad', debug, window.location.search);
+                log('location', {location: window.location});
                 gatewayAddress = location.origin + "/";
 
-                addMessageToHistory('Welcome to SwapChat!', false, true);
-
-                init(gatewayAddress, function(msg) {
-                    console.log('messageCallback', msg);
-                    addMessageToHistory(makeHTMLMessage(msg.payload()), false, false);
-                }, function(linkHash, sharedPrivateKey) {
-                    var linkHash = getLinkHash(window.location.pathname);
-                    var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
-                    addQRCodeToHistory(manifestLink);
-                    addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', false, true);
-                },
-                function() {
-                    console.log('stateCallback');
-                    addMessageToHistory('You are connected...', false, true);
-                    document.getElementById("chatinput").focus();
-                });
+                log('before init', gatewayAddress);
+                try {
+                    init({
+                        gatewayAddress: gatewayAddress,
+                        messageCallback: function(msg) {
+                            log('messageCallback', msg);
+                            addMessageToHistory(makeHTMLMessage(msg.payload()), 'your');
+                        },
+                        manifestCallback: function(linkHash, sharedPrivateKey) {
+                            removeLoading();
+                            var linkHash = getLinkHash(window.location.pathname);
+                            var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
+                            addQRCodeToHistory(manifestLink);
+                            addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', 'bot');
+                        },
+                        stateCallback: function() {
+                            log('stateCallback');
+                            removeLoading();
+                            addMessageToHistory('You are connected...', 'bot');
+                            document.getElementById("chatinput").focus();
+                        },
+                        logFunction: log,
+                    });
+                } catch (e) {
+                    log('init failed', e.message, e);
+                }
             }
         </script>
 
@@ -163,15 +178,6 @@ html, body{
     padding: 0;
     overflow: hidden;
     position: fixed;
-}
-
-.debug {
-    display: none;
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 6vw;
-    height: 6vw;
 }
 
 .name {
@@ -273,6 +279,15 @@ p.message.mine {
     background-color: #006DF0;
     color: #fff;
     margin-right: 10;
+}
+p.message.log {
+    font-size: 1.5vmax;
+    color: black;
+    padding: 0.2vmax;
+    margin: 0;
+    word-break: break-all;
+    white-space: normal;
+    max-width: 95%;
 }
 p.status {
     display: flex;
@@ -387,16 +402,35 @@ input.nostyle {
     }
 }
 
+.pulsate {
+    animation: pulsate 1.5s ease-out;
+    animation-iteration-count: infinite;
+    opacity: 0.5;
+}
+@keyframes pulsate {
+    0% {
+        opacity: 0.5;
+    }
+    50% {
+        opacity: 1.0;
+    }
+    100% {
+        opacity: 0.5;
+    }
+}
         </style>
     </head>
     <body onload="onLoad()">
         <div class="mainContainer">
-            <div id="debug" class="debug" onclick="changeMode()">
-                <button>Mode</button>
-            </div>
-
             <div id="chat" class="chat">
-                <ul class="history" id="history"></ul>
+                <ul class="history" id="history">
+                    <li class="entry bot">
+                        <p class="message bot">Welcome to SwapChat!</p>
+                    </li>
+                    <li class="entry bot">
+                        <p class="message bot" id="loading">Loading<span class="pulsate">...</span></p>
+                    </li>
+                </ul>
                 <div class="write">
                     <input type="textarea" id="chatinput" autocomplete="off" value="" placeholder="Type a message..." />
                     <div class="sendcontainer-desktop">
