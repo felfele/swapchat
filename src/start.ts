@@ -5,4 +5,10 @@ function logMessage(msg) {
 	console.log("got message: " + msg.payload());
 }
 
-init('http://localhost:8500/', logMessage, () => {}, () => {});
+init({
+	gatewayAddress: 'http://localhost:8500/',
+	messageCallback: logMessage,
+	manifestCallback: () => {},
+	stateCallback: () => {},
+	logFunction: console.log,
+});
