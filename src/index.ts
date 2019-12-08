@@ -5,11 +5,12 @@ import * as ec from 'eccrypto';
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
+const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
+const MSGPERIOD = 1000;
+
+type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 
 let log = console.log;
-/////////////////////////////////
-// HEADER SCRIPT
-/////////////////////////////////
 let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
 
 function getTmpPrivKey(): string | undefined {
@@ -27,87 +28,17 @@ function getTmpPrivKey(): string | undefined {
 	return undefined;
 }
 
-
-
-/////////////////////////////////
-// MAIN SCRIPT
-/////////////////////////////////
-//
-// everything below here must be immutable and usable for both requester and responder
-// the compiled version of it will be used in the script generation for the responser
-const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
-const MSGPERIOD = 1000;
-
 // creates the key to a particular feed update chunk, fetchaable with bzz-feed-raw://
-function feedToReference(user: string, topic: string, tim:number, level: number):string {
+function feedToReference(user: string, topic: string, time: number, level: number): string {
 	let b = new ArrayBuffer(20+32+7+1);
 	let f = new Uint8Array(b);
 	let v = new DataView(b);
 	f.set(hexToArray(topic), 0);
 	f.set(hexToArray(user), 32);
-	v.setUint32(20+32, tim, true);
+	v.setUint32(20+32, time, true);
 	v.setUint8(20+32+7, level);
 	let d = hash(Buffer.from(b));
 	return arrayToHex(d);
-}
-
-type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
-
-// Represents messages sent between the peers
-// A message without a payload is considered a "ping" message
-// If end is set, peer must terminate the chat
-class ChatMessage {
-	_serial: number
-	_lastHashSelf: string
-	_lastHashOther: string
-	_payload: string = ''
-	_padding: number = 0
-	_end: boolean
-
-	constructor(lastSelf?: string, lastOther?: string, serial?: number) {
-		this._lastHashSelf = lastSelf;
-		this._lastHashOther = lastOther;
-		this._serial = serial;
-	}
-
-	public setPayload = (payload: string) => {
-		this._payload = payload;
-	}
-
-	public payload = ():string => {
-		return this._payload;
-	}
-
-	public setEnd = () => {
-		this._end = true;
-	}
-
-	public hasEnd = () => {
-		return this._end === true;
-	}
-
-	public toString = (): string => {
-		let o = {
-			serial: this._serial,
-			lastSelf: this._lastHashSelf,
-			lastOther: this._lastHashOther,
-			end: this._end,
-			payload: undefined
-		};
-		if (this._payload != "") {
-			o.payload = this._payload
-		}
-		return JSON.stringify(o);
-	}
-
-	public fromString = (s:string) => {
-		let o = JSON.parse(s);
-		this._lastHashSelf = o.lastSelf;
-		this._lastHashOther = o.lastOther;
-		this._serial = o.serial;
-		this._payload = o.payload;
-		this._end = o.end;
-	}
 }
 
 const stripHexPrefix = (s: string) => s.startsWith("0x") ? s.slice(2) : s;
@@ -145,175 +76,6 @@ const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Prom
 		return message;
 	} catch (e) {
 		console.log('decryptAesGcm', {e});
-	}
-}
-
-// Session object
-// keeps track of message order and controls sending and receiving of messages
-// our feed is our user and function of peer user as topic
-// peer feed is peer user and function of our user as topic
-class ChatSession {
-	_lastHashSelf: string = ZEROHASH	// previous hash from own posts
-	_lastHashOther: string = ZEROHASH	// previous hash from peer's posts
-	_serial: number = 0			// increments on every message post (includes ping loop)
-	_bzz: BzzAPI				// swarm transport api object
-	_userMe: string				// own user, who signs posts
-	_userOther: string			// peer user, from whom we receive messages
-	_topic: string				// topic of chat feeds
-	_secret: string				// key to encrypt payloads with
-	_msgPeriod:number = MSGPERIOD
-	_messageCallback:any
-	_debug:boolean = false
-	_running:boolean = true
-	_pollSerial:number = 0
-
-	constructor(url: string, userMe: string, signer: any, messageCallback: any) {
-		const signBytes = signer;
-		this._bzz = new BzzAPI({ url: url, signBytes });
-		this._userMe = userMe;
-		this._messageCallback = messageCallback;
-	}
-
-	public setDebug = () => {
-		this._debug = true;
-	}
-
-	public setMessagePeriod = (p:number) => {
-		this._msgPeriod = p;
-	}
-
-	public userToTopic = (user: string): string => {
-		return createHex(user).toString();
-	}
-
-	// create a new message from the current state
-	// the creation of new messages will be locked until the message is sent
-	// if locked, undefined will be returned
-	public newMessage = (): ChatMessage => {
-		let msg = new ChatMessage(this._lastHashSelf, this._lastHashOther, this._serial);
-		this._serial++;
-		return msg;
-	}
-
-	// attempts to post the message to the feed
-	// on success unlocks message creation (newMessage can be called again)
-	public sendMessage = async (msg: ChatMessage) => {
-		if (this._debug) {
-			console.log("sending: " + msg.toString());
-		}
-		const payload = await encryptAesGcm(msg.toString(), this._secret);
-		let h = '';
-		try {
-			const buf = Buffer.from(payload);
-			h = await this._bzz.upload(buf);
-		} catch(e) {
-			throw "error uploading msg: " + e
-		}
-		this._lastHashSelf = h;
-		if (this._debug) {
-			console.log("sent message uploaded to " + h);
-		}
-
-	}
-
-	// starts the retrieve and post loop after we know the user of the other party
-	public async start(userOther: string, secret: string): Promise<any> {
-		console.log("secret: " + secret);
-		if (secret.substring(0, 2) === "0x") {
-			secret = secret.substring(2, secret.length);
-		}
-		this._secret = secret;
-		this._userOther = userOther;
-		let b = new ArrayBuffer(32);
-		let t = new Uint8Array(b);
-		t.set(hexToArray(secret));
-		let h = hash(Buffer.from(b))
-		this._topic = "0x" + arrayToHex(h);
-		this.ping();
-		this.poll();
-	}
-
-	// make sure we have pings sent every period if no other message is in the process of being sent
-	private ping = async () => {
-		if (this._running) {
-			let msg = this.newMessage();
-			const feedOptions = {
-				user: this._userMe,
-				topic: this._topic,
-			}
-			let r = await this._bzz.setFeedContent(feedOptions, this._lastHashSelf);
-			console.log("ping res: " + r);
-		}
-		if (this._running) {
-			setTimeout(this.ping, MSGPERIOD);
-		}
-	}
-
-	private poll = async () =>  {
-		let messages = [];
-		let bz = this._bzz;
-		let p = undefined;
-		try {
-			let r = await downloadFromFeed(bz, this._userOther, this._topic);
-			p = await r.text();
-		} catch (e) {
-			console.log('downloadFromFeed', e);
-			setTimeout(this.poll, this._msgPeriod);
-			return;
-		}
-		console.log("poll recv: " + p);
-		if (p === ZEROHASH) {
-			setTimeout(this.poll, this._msgPeriod);
-			return;
-		}
-
-		let currentHash = p;
-		console.log("Got feed message with hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
-
-		while (currentHash != this._lastHashOther) {
-			try {
-				let r = await bz.download(currentHash, {mode: 'raw'});
-				let buf = await r.arrayBuffer();
-				const p = await decryptAesGcm(new Uint8Array(buf), this._secret);
-				let msg = new ChatMessage();
-				msg.fromString(p);
-				console.log("hash: cur " + currentHash + " obj " + this._lastHashOther + " msg " + msg._lastHashSelf);
-				currentHash = msg._lastHashSelf;
-				console.log("Got linked message with lasthash: " + msg._lastHashSelf + " hashother " + this._lastHashOther + " curhash " + currentHash + " msgperiod " + this._msgPeriod + " serial" + this._pollSerial);
-				if (msg.hasEnd()) {
-					console.log("caught end, terminating");
-					this.stop();
-					this._running = false;
-				}
-				messages.push(msg);
-			} catch(e) {
-				console.error(e);
-				break;
-			}
-		}
-		this._pollSerial++;
-		this._lastHashOther = p;
-		console.log("set lasthash: obj " + this._lastHashOther + " msg " + currentHash);
-		if (messages.length > 0) {
-			messages.reverse();
-			messages.forEach(this._messageCallback);
-		}
-		if (this._running) {
-			setTimeout(this.poll, this._msgPeriod);
-		}
-	}
-
-	// teardown of chat session
-	public async stop(): Promise<any> {
-		this._running = false;
-		return new Promise((whohoo, doh) => {
-			whohoo();
-		});
-	}
-
-	// perhaps we should abstract all BzzAPI calls instead
-	public bzz = (): any => {
-		return this._bzz;
 	}
 }
 
@@ -389,7 +151,6 @@ function arrayToHex(data:any):string {
 }
 
 async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<string|undefined> {
-
 	const feedParams = {
 		feed: {
 			user: user,
@@ -398,7 +159,7 @@ async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: 
 		epoch: {
 			time: index,
 			level: 0,
-		}
+		},
 	}
 
 	try {
@@ -412,28 +173,21 @@ async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: 
 	}
 }
 
-async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
+async function downloadBufferFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<Buffer> {
 	const reference = feedToReference(user, topic, index, 0);
 	const url = bzz._url + `bzz-feed-raw:/${reference}`;
-	log('downloadFromRawFeed', {url});
 	const nodeFetch = require("node-fetch");
 	const response = await nodeFetch(url) as Response;
 	const dataBuffer = await response.arrayBuffer();
 	const b = Buffer.from(dataBuffer, 68, dataBuffer.byteLength - 65 - 68);
-	const s = b.toString('hex');
-	console.log('downloadFromRawFeed', {user, topic, index, reference, s});
-	return s;
+	return b;
 }
 
-function downloadFromFeed(bz: any, user: string, topic: string): Promise<any> {
-	const feedOptions = {
-		user: user,
-		topic: topic,
-	}
-
-	return bz.getFeedContent(feedOptions, {
-		mode: "raw",
-	});
+async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
+	const b = await downloadBufferFromRawFeed(bzz, user, topic, index);
+	const s = b.toString('hex');
+	console.log('downloadFromRawFeed', {s});
+	return s;
 }
 
 // if bz is supplied, will update tmp feed
@@ -523,32 +277,38 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerSelf });
 	let writeIndex = 0;
 	let readIndex = 0;
+	let secretHex = undefined;
 	const poll = async (userOther: string) => {
 		while (true) {
 			try {
-				console.log('poll', userOther, readIndex);
-				const messageReference = await downloadFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				console.log('poll', userOther, readIndex, secretHex);
+				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
 				const response = await bzz.download(messageReference, {mode: 'raw'});
-				const message = await response.text();
+				const encryptedArrayBuffer = await response.arrayBuffer();
+				const message = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
 				readIndex += 1;
 				messageCallback({
 					payload: () => message,
 				});
 			} catch (e) {
+				console.log('poll failed', e);
 				break;
 			}
 		}
-		setTimeout(poll, 1000, userOther);
+		setTimeout(poll, MSGPERIOD, userOther);
 	}
 	return {
 		sendMessage: async (message: string) => {
-			const messageReference = await bzz.upload(message);
-			console.log('sendMessage', {messageReference});
-			const messageReferenceBytes = Buffer.from(hexToArray(messageReference))
+			const encryptedMessage = await encryptAesGcm(message, secretHex);
+			const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+			const messageReferenceBytes = Buffer.from(encryptedReference)
 			const r = await uploadToRawFeed(bzz, userSelf, ZEROHASH, writeIndex, messageReferenceBytes);
 			writeIndex += 1;
 		},
 		start: async (userOther: string, secret: string) => {
+			secretHex = secret;
 			await poll(userOther);
 		}
 	}
