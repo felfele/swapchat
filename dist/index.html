@@ -75,6 +75,29 @@
                 });
             }
 
+            function addEmojisToHistory(emojis) {
+                var table = '<table>';
+                for (var i = 0; i < 4; i++) {
+                    table += '<tr>';
+                    for (var j = 0; j < 6; j++) {
+                        table += '<td>' + emojis[i * 6 + j] + '</td>';
+                    }
+                    table += '</tr>';
+                }
+                table += '</table>';
+                var li = '<li class="entry bot">' + table + '</li>';
+                addToHistory(li);
+            }
+
+            function addColorsToHistory(colors) {
+                var spans = '';
+                for (var i = 0; i < colors.length; i++) {
+                    spans += '<span class="color" style="background-color:' + colors[i] + '"></span>';
+                }
+                var li = '<li class="entry bot">' + spans + '</li>';
+                addToHistory(li);
+            }
+
             function makeHTMLMessage(text) {
                 var urlExpression = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*))/gi;
                 var regex = new RegExp(urlExpression);
@@ -131,6 +154,15 @@
                 }
             }
 
+            function mapEmojisToTable(emojis, prefix) {
+                prefix = prefix || '';
+                for (var i = 0; i < emojis.length; i++) {
+                    var elem = document.getElementById(prefix + i);
+                    elem.innerText = '' + emojis[i];
+                }
+            }
+
+
             function onLoad() {
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
                 log('onLoad', debug, window.location.search);
@@ -152,10 +184,15 @@
                             addQRCodeToHistory(manifestLink);
                             addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', 'bot');
                         },
-                        stateCallback: function() {
+                        stateCallback: function(topicHex) {
                             log('stateCallback');
                             removeLoading();
                             addMessageToHistory('You are connected...', 'bot');
+                            var emojis = hexToEmojis(topicHex);
+                            addEmojisToHistory(emojis);
+                            var colors = hexToColors(topicHex);
+                            addColorsToHistory(colors);
+                            addMessageToHistory('Verify the emojis or the colors with your peer', 'bot');
                             document.getElementById("chatinput").focus();
                         },
                         logFunction: log,
@@ -180,8 +217,17 @@ html, body{
     position: fixed;
 }
 
+td {
+    font-size: 40;
+}
+
 .name {
     font-size: 4vmax;
+}
+
+.color {
+    width: 40;
+    height: 40;
 }
 
 .mainContainer {

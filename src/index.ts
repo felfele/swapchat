@@ -2,13 +2,15 @@ import { createHex, BzzAPI  } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
 import * as ec from 'eccrypto';
+export { hexToEmojis } from './verifyemoji';
+export { hexToColors } from './verifycolors';
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
-const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
+type StateCallback = (topicHex: string) => void;
 
 let log = console.log;
 let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
@@ -128,7 +130,7 @@ function newPrivateKey() {
 	return ec.generatePrivate();
 }
 
-function hexToArray(data:string):Uint8Array {
+export function hexToArray(data:string):Uint8Array {
 	data = stripHexPrefix(data);
 	let databuf = new ArrayBuffer(data.length / 2);
 	let uintdata = new Uint8Array(databuf);
@@ -252,14 +254,14 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<void> {
+async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<string> {
 	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(bzz, 0);
 		if (userOther !== undefined) {
-			return;
+			return stripHexPrefix(topicTmp);
 		}
 		await waitUntil(nextCheckTime);
 	}
@@ -269,7 +271,7 @@ async function startResponse(bzz: BzzAPI):Promise<string> {
 	const handshakePubOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
 	console.log('handshakePubOther', handshakePubOther);
 	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
-	return userOther;
+	return stripHexPrefix(topicTmp);
 }
 
 
@@ -282,7 +284,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		while (true) {
 			try {
 				console.log('poll', userOther, readIndex, secretHex);
-				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, topicTmp, readIndex);
 				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
 				const response = await bzz.download(messageReference, {mode: 'raw'});
 				const encryptedArrayBuffer = await response.arrayBuffer();
@@ -304,7 +306,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 			const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
 			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
 			const messageReferenceBytes = Buffer.from(encryptedReference)
-			const r = await uploadToRawFeed(bzz, userSelf, ZEROHASH, writeIndex, messageReferenceBytes);
+			const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, messageReferenceBytes);
 			writeIndex += 1;
 		},
 		start: async (userOther: string, secret: string) => {
@@ -318,7 +320,7 @@ export function init(params: {
 	gatewayAddress: string,
 	messageCallback: any,
 	manifestCallback: ManifestCallback,
-	stateCallback: any,
+	stateCallback: StateCallback,
 	logFunction: (...args: any[]) => void,
 }) {
 	log = params.logFunction;
@@ -327,15 +329,15 @@ export function init(params: {
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
-		startRequest(bzz, params.manifestCallback).then((v) => {
-			params.stateCallback();
+		startRequest(bzz, params.manifestCallback).then((topicHex) => {
+			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
 		});
 	} else {
-		startResponse(bzz).then((v) => {
-			params.stateCallback();
+		startResponse(bzz).then((topicHex) => {
+			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting response: ", e);
 			log("error starting response: ", e);
