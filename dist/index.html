@@ -187,12 +187,12 @@
                         stateCallback: function(topicHex) {
                             log('stateCallback');
                             removeLoading();
-                            addMessageToHistory('You are connected...', 'bot');
                             var emojis = hexToEmojis(topicHex);
                             addEmojisToHistory(emojis);
                             var colors = hexToColors(topicHex);
                             addColorsToHistory(colors);
                             addMessageToHistory('Verify the emojis or the colors with your peer', 'bot');
+                            addMessageToHistory('You are connected...', 'bot');
                             document.getElementById("chatinput").focus();
                         },
                         logFunction: log,
