@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/start.ts",
-    "pack": "tsc --resolveJsonModule --outDir build src/index.ts && npx webpack"
+    "pack": "tsc && npx webpack"
   },
   "keywords": [],
   "author": "",
@@ -27,8 +27,8 @@
   "dependencies": {
     "@erebos/keccak256": "^0.7.0",
     "@erebos/secp256k1": "^0.7.0",
-    "@erebos/swarm": "^0.8.1",
-    "@erebos/swarm-node": "^0.8.1",
+    "@erebos/swarm": "^0.12.0",
+    "@erebos/swarm-node": "^0.12.0",
     "eccrypto": "^1.1.1",
     "secp256k1": "^3.7.1"
   }

@@ -1,4 +1,5 @@
-import { createHex, BzzAPI  } from '@erebos/swarm';
+import { SwarmClient, Bzz } from '@erebos/swarm';
+import { createHex } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
 import * as ec from 'eccrypto';
@@ -152,44 +153,32 @@ function arrayToHex(data:any):string {
 	return hexout;
 }
 
-async function uploadToRawFeed(bzz: BzzAPI, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<string|undefined> {
+async function uploadToRawFeed(bzz: Bzz, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<void> {
 	const feedParams = {
-		feed: {
-			user: user,
-			topic: topic,
-		},
-		epoch: {
-			time: index,
-			level: 0,
-		},
+		user: user,
+		topic: topic,
+		time: index,
+		level: 0,
 	}
 
 	try {
-		const resp = await bzz.postFeedChunk(feedParams, data);
-		const ref = await resp.text();
-		const url = bzz._url + `bzz-feed-raw:/${ref.replace(/"/g, "")}`;
-		console.log('uploadToRawFeed', {url});
-		return ref;
+		const resp = await bzz.setRawFeedContent(feedParams, data);
 	} catch (e) {
 		console.error('uploadToRawFeed', {e});
 	}
 }
 
-async function downloadBufferFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<Buffer> {
-	const reference = feedToReference(user, topic, index, 0);
-	const url = bzz._url + `bzz-feed-raw:/${reference}`;
-	const nodeFetch = require("node-fetch");
-	const response = await nodeFetch(url) as Response;
+async function downloadBufferFromRawFeed(bzz: Bzz, user: string, topic: string, index: number): Promise<Buffer> {
+	const response = await bzz.getRawFeedContent({
+		user,
+		topic,
+		level: 0,
+		time: index,
+	}, {
+		mode: 'raw',
+	});
 	const dataBuffer = await response.arrayBuffer();
-	const b = Buffer.from(dataBuffer, 68, dataBuffer.byteLength - 65 - 68);
-	return b;
-}
-
-async function downloadFromRawFeed(bzz: BzzAPI, user: string, topic: string, index: number): Promise<string> {
-	const b = await downloadBufferFromRawFeed(bzz, user, topic, index);
-	const s = b.toString('hex');
-	console.log('downloadFromRawFeed', {s});
-	return s;
+	return dataBuffer;
 }
 
 // if bz is supplied, will update tmp feed
@@ -227,9 +216,10 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	return userOther;
 }
 
-async function checkResponse(bzz: BzzAPI, attempts:number):Promise<string|undefined> {
+async function checkResponse(bzz: Bzz):Promise<string|undefined> {
 	try {
-		const handshakeOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		const handshakeOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		const handshakeOther = Buffer.from(handshakeOtherBuffer).toString();
 		const userOther = await connectToPeer(handshakeOther);
 		return userOther;
 	} catch (e) {
@@ -254,12 +244,12 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Promise<string> {
+async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
 	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
-		const userOther = await checkResponse(bzz, 0);
+		const userOther = await checkResponse(bzz);
 		if (userOther !== undefined) {
 			return stripHexPrefix(topicTmp);
 		}
@@ -267,8 +257,9 @@ async function startRequest(bzz: BzzAPI, manifestCallback: ManifestCallback):Pro
 	}
 }
 
-async function startResponse(bzz: BzzAPI):Promise<string> {
-	const handshakePubOther = await downloadFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
+async function startResponse(bzz: Bzz):Promise<string> {
+	const handshakePubOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
+	const handshakePubOther = Buffer.from(handshakePubOtherBuffer).toString();
 	console.log('handshakePubOther', handshakePubOther);
 	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
 	return stripHexPrefix(topicTmp);
@@ -276,7 +267,11 @@ async function startResponse(bzz: BzzAPI):Promise<string> {
 
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
-	const bzz = new BzzAPI({ url: gatewayAddress, signBytes: signerSelf });
+	const swarmClient = new SwarmClient({bzz: {
+		url: gatewayAddress,
+		signBytes: signerSelf
+	}});
+	const bzz = swarmClient.bzz;
 	let writeIndex = 0;
 	let readIndex = 0;
 	let secretHex = undefined;
@@ -305,8 +300,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
 			const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
 			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
-			const messageReferenceBytes = Buffer.from(encryptedReference)
-			const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, messageReferenceBytes);
+			const encryptedReferenceBytes = Buffer.from(encryptedReference)
+			const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 			writeIndex += 1;
 		},
 		start: async (userOther: string, secret: string) => {
@@ -325,7 +320,11 @@ export function init(params: {
 }) {
 	log = params.logFunction;
 	log('init called');
-	const bzz = new BzzAPI({ url: params.gatewayAddress, signBytes: signerTmp });
+	const swarmClient = new SwarmClient({bzz: {
+		url: params.gatewayAddress,
+		signBytes: signerTmp,
+	}});
+	const bzz = swarmClient.bzz;
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
