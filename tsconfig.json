@@ -1,0 +1,7 @@
+{
+    "compilerOptions": {
+        "resolveJsonModule": true,
+        "outDir": "build"
+    },
+    "files": ["src/index.ts"]
+}
