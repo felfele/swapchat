@@ -6,10 +6,10 @@ import * as ec from 'eccrypto';
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
-const ZEROHASH = '0x0000000000000000000000000000000000000000000000000000000000000000';
 const MSGPERIOD = 1000;
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
+type StateCallback = (topicHex: string) => void;
 
 let log = console.log;
 let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
@@ -27,19 +27,6 @@ function getTmpPrivKey(): string | undefined {
 		return tmpPrivKey;
 	}
 	return undefined;
-}
-
-// creates the key to a particular feed update chunk, fetchaable with bzz-feed-raw://
-function feedToReference(user: string, topic: string, time: number, level: number): string {
-	let b = new ArrayBuffer(20+32+7+1);
-	let f = new Uint8Array(b);
-	let v = new DataView(b);
-	f.set(hexToArray(topic), 0);
-	f.set(hexToArray(user), 32);
-	v.setUint32(20+32, time, true);
-	v.setUint8(20+32+7, level);
-	let d = hash(Buffer.from(b));
-	return arrayToHex(d);
 }
 
 const stripHexPrefix = (s: string) => s.startsWith("0x") ? s.slice(2) : s;
@@ -129,7 +116,7 @@ function newPrivateKey() {
 	return ec.generatePrivate();
 }
 
-function hexToArray(data:string):Uint8Array {
+export function hexToArray(data:string):Uint8Array {
 	data = stripHexPrefix(data);
 	let databuf = new ArrayBuffer(data.length / 2);
 	let uintdata = new Uint8Array(databuf);
@@ -242,14 +229,14 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<void> {
+async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
 	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(bzz);
 		if (userOther !== undefined) {
-			return;
+			return stripHexPrefix(topicTmp);
 		}
 		await waitUntil(nextCheckTime);
 	}
@@ -260,7 +247,7 @@ async function startResponse(bzz: Bzz):Promise<string> {
 	const handshakePubOther = Buffer.from(handshakePubOtherBuffer).toString();
 	console.log('handshakePubOther', handshakePubOther);
 	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
-	return userOther;
+	return stripHexPrefix(topicTmp);
 }
 
 
@@ -277,7 +264,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		while (true) {
 			try {
 				console.log('poll', userOther, readIndex, secretHex);
-				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, ZEROHASH, readIndex);
+				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, topicTmp, readIndex);
 				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
 				const response = await bzz.download(messageReference, {mode: 'raw'});
 				const encryptedArrayBuffer = await response.arrayBuffer();
@@ -313,7 +300,7 @@ export function init(params: {
 	gatewayAddress: string,
 	messageCallback: any,
 	manifestCallback: ManifestCallback,
-	stateCallback: any,
+	stateCallback: StateCallback,
 	logFunction: (...args: any[]) => void,
 }) {
 	log = params.logFunction;
@@ -326,15 +313,15 @@ export function init(params: {
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
-		startRequest(bzz, params.manifestCallback).then((v) => {
-			params.stateCallback();
+		startRequest(bzz, params.manifestCallback).then((topicHex) => {
+			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
 		});
 	} else {
-		startResponse(bzz).then((v) => {
-			params.stateCallback();
+		startResponse(bzz).then((topicHex) => {
+			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting response: ", e);
 			log("error starting response: ", e);
