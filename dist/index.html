@@ -18,6 +18,11 @@
             }
 
             function copyToClipboard() {
+              var input = document.getElementById("linkInput");
+
+              if (input.select) {
+                input.select()
+              } else if (window.getSelection) {
                 var input = document.getElementById("linkInput");
                 var range = document.createRange();
                 input.contentEditable = true;
@@ -28,8 +33,12 @@
                 s.addRange(range);
                 input.setSelectionRange(0, 999999); // A big number, to cover anything that could be inside the element.
                 input.readOnly = true;
-                var ret = document.execCommand("copy");
-                log(ret);
+              } else {
+                console.warn("Could not copy text: Unsupported browser.");
+              }
+
+              var ret = document.execCommand("copy");
+              log(ret);
             }
 
             function addToHistory(innerHTML) {
