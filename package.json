@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/start.ts",
-    "pack": "tsc --outDir build src/index.ts && npx webpack"
+    "pack": "tsc --outDir build src/index.ts && npx webpack",
+    "postinstall": "cp node_modules/qrcode/build/qrcode.min.js dist"
   },
   "keywords": [],
   "author": "",
