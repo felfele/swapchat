@@ -7,6 +7,15 @@ The project was initally done as a Swarm Hackweek Madrid 2019 project as a colla
 [<img src="screenshot.png" width=800>](screenshot.png)
 
 ### Building and running the app
+
+First, install the dependencies:
+
+```
+ $ npm install
+```
+
+Then build the app:
+
 ```
  $ npm run pack
 ```
