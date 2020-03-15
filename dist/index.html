@@ -58,9 +58,8 @@
             }
 
             function addQRCodeToHistory(link) {
-                var input = '<input id="linkInput" type="text" value="' + link + '" class="link" readonly />';
+                var input = '<textarea rows="1" cols="60" id="linkInput" type="textarea" class="link" readonly>' + link + '</textarea>';
                 var li = '<li class="entry bot">' + input + '</li>';
-                addToHistory(li);
                 log('addQRCodeToHistory', link);
                 var opts = {
                     errorCorrectionLevel: 'H',
@@ -80,6 +79,7 @@
                         log('success!');
                         const innerHTML = `<li class="entry bot"><img class="qrcode" id="qrcode" src="${url}" /></li>`;
                         addToHistory(innerHTML);
+                        addToHistory(li);
                     }
                 });
             }
@@ -232,8 +232,8 @@ html, body{
 }
 
 .link {
-    font-size: 3vmax;
-    width: 80%;
+    font-size: 2.0vh;
+    width: 40vw;
 }
 
 .qrcode {
