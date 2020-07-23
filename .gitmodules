@@ -1,0 +1,3 @@
+[submodule "src/contrib/bee-client"]
+	path = src/contrib/bee-client
+	url = https://github.com/felfele/bee-client

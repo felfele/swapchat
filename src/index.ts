@@ -2,7 +2,11 @@ import { SwarmClient, Bzz } from '@erebos/swarm';
 import { createHex } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
+import { Signer } from './signer';
 import * as ec from 'eccrypto';
+import * as dfeeds from 'dfeeds';
+import * as swarm from 'swarm-lowlevel';
+
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
@@ -80,6 +84,7 @@ const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
 console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
 
 const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
+const socSignerSelf = new Signer(keyPairSelf);
 const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // console.log("keyPrivSelf", keyPrivSelf.length);
 
@@ -104,7 +109,7 @@ topicTmpArray.forEach(function(k) {
 
 });
 const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
-
+const socSignerTmp = new Signer(keyPairTmp);
 
 // the peer
 let keyPairOtherPub = undefined;
@@ -228,8 +233,25 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
     return 0;
 }
 
+async function updateFeed(cb) {
+	console.debug(cb);
+}
+
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
+//	let publicKeySelfChunk = undefined;
+//	function cb(ch) {
+//		publicKeySelfChunk = ch;
+//	}
+
+	const nextSocId = chatSession.tmpFeed.next();
+	const soc = swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed)
+
+	const h = swarm.fileSplitter(soc.SetChunk);
+	h.update(publicKeySelf);
+	h.digest();
+	soc.sign();
+
 	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
@@ -280,6 +302,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		}
 		setTimeout(poll, MSGPERIOD, userOther);
 	}
+	console.debug('topictmp', topicTmpArray);
 	return {
 		sendMessage: async (message: string) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
@@ -292,7 +315,10 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		start: async (userOther: string, secret: string) => {
 			secretHex = secret;
 			await poll(userOther);
-		}
+		},
+		selfFeed: undefined,
+		otherFeed: undefined,
+		tmpFeed: new dfeeds.indexed(topicTmpArray),
 	}
 }
 
