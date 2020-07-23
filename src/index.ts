@@ -260,7 +260,37 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	let writeIndex = 0;
 	let readIndex = 0;
 	let secretHex = undefined;
+
+	const sendEnvelope = async (envelope) => {
+		const envelopeJson = JSON.stringify(envelope)
+		const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
+		const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+		const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+		const encryptedReferenceBytes = Buffer.from(encryptedReference)
+		const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+		writeIndex += 1;
+	}
+	const sendMessage = async (message: string) => {
+		const envelope = {
+			type: 'message',
+			message,
+		}
+		return sendEnvelope(envelope)
+	}
+	const sendPing = () => {
+		const envelope = {
+			type: 'ping',
+		}
+		return sendEnvelope(envelope)
+	}
+	const sendDisconnect = () => {
+		const envelope = {
+			type: 'disconnect',
+		}
+		return sendEnvelope(envelope)
+	}
 	const poll = async (userOther: string) => {
+		sendPing() // NOTE that we are not awaiting this to finish
 		while (true) {
 			try {
 				console.log('poll', userOther, readIndex, secretHex);
@@ -268,11 +298,10 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
 				const response = await bzz.download(messageReference, {mode: 'raw'});
 				const encryptedArrayBuffer = await response.arrayBuffer();
-				const message = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
+				const envelopeJson = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
 				readIndex += 1;
-				messageCallback({
-					payload: () => message,
-				});
+				const envelope = JSON.parse(envelopeJson)
+				messageCallback(envelope);
 			} catch (e) {
 				console.log('poll failed', e);
 				break;
@@ -281,14 +310,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		setTimeout(poll, MSGPERIOD, userOther);
 	}
 	return {
-		sendMessage: async (message: string) => {
-			const encryptedMessage = await encryptAesGcm(message, secretHex);
-			const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
-			const encryptedReferenceBytes = Buffer.from(encryptedReference)
-			const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
-			writeIndex += 1;
-		},
+		sendMessage,
+		sendDisconnect,
 		start: async (userOther: string, secret: string) => {
 			secretHex = secret;
 			await poll(userOther);
@@ -332,6 +355,14 @@ export function init(params: {
 export function send(message: string) {
 	try {
 		chatSession.sendMessage(message);
+	} catch(e) {
+		console.error(e);
+	}
+}
+
+export function disconnect() {
+	try {
+		chatSession.sendDisconnect();
 	} catch(e) {
 		console.error(e);
 	}

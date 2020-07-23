@@ -152,7 +152,11 @@
                         gatewayAddress: gatewayAddress,
                         messageCallback: function(msg) {
                             log('messageCallback', msg);
-                            addMessageToHistory(makeHTMLMessage(msg.payload()), 'your');
+                            if (msg.type == 'message') {
+                                addMessageToHistory(makeHTMLMessage(msg.message), 'your');
+                            } else if (msg.type == 'disconnect') {
+                                addMessageToHistory('Your peer is disconnected', 'bot');
+                            }
                         },
                         manifestCallback: function(linkHash, sharedPrivateKey) {
                             removeLoading();
@@ -172,6 +176,10 @@
                 } catch (e) {
                     log('init failed', e.message, e);
                 }
+            }
+
+            function onBeforeUnload() {
+                disconnect();
             }
         </script>
 
@@ -430,7 +438,7 @@ input.nostyle {
 }
         </style>
     </head>
-    <body onload="onLoad()">
+    <body onload="onLoad()" onbeforeunload="onBeforeUnload()" >
         <div class="mainContainer">
             <div id="chat" class="chat">
                 <ul class="history" id="history">
