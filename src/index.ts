@@ -2,10 +2,11 @@ import { SwarmClient, Bzz } from '@erebos/swarm';
 import { createHex } from '@erebos/swarm';
 import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
 import { pubKeyToAddress, hash } from '@erebos/keccak256';
-import { Signer } from './signer';
 import * as ec from 'eccrypto';
 import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
+import * as bee from 'bee-client';
+import * as wallet from 'swarm-lowlevel/unsafewallet';
 
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
@@ -84,7 +85,7 @@ const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
 console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
 
 const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
-const socSignerSelf = new Signer(keyPairSelf);
+const socSignerSelf = new wallet.Wallet(Buffer.from(hexToArray(privateKeySelf.substring(2))));
 const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // console.log("keyPrivSelf", keyPrivSelf.length);
 
@@ -93,11 +94,18 @@ const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // const publicKeyTmp = "0x03f0070f8376b33b3216eaab30f3b12919a4876c2bdf2b21e87754d2f4d75abea1";
 // const userTmp = "0x00c13ab42a8650c29998b0a4bb2cd1906128e7de";
 
-const keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
+let keyPairTmp = undefined;
+if (keyTmpRequestPriv != undefined) {
+	keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
+} else {
+	keyPairTmp = createKeyPair();
+}
+
 const privateKeyTmp = "0x" + keyPairTmp.getPrivate("hex");
 const publicKeyTmp = "0x" + keyPairTmp.getPublic("hex");
 const userTmp = pubKeyToAddress(createHex(publicKeyTmp).toBuffer());
 
+const socSignerTmp = new wallet.Wallet(Buffer.from(hexToArray(privateKeyTmp.substring(2))));
 console.log('privateKeyTmp', {privateKeyTmp, publicKeyTmp, userTmp});
 
 let topicTmp = "0x";
@@ -109,7 +117,6 @@ topicTmpArray.forEach(function(k) {
 
 });
 const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
-const socSignerTmp = new Signer(keyPairTmp);
 
 // the peer
 let keyPairOtherPub = undefined;
@@ -233,8 +240,22 @@ async function waitUntil(untilTimestamp: number, now: number = Date.now()): Prom
     return 0;
 }
 
-async function updateFeed(cb) {
-	console.debug(cb);
+async function updateFeed(ch) {
+	console.debug('updatefeed', ch, arrayToHex(ch.reference));
+	let h = await bee.uploadChunkData(ch.data, arrayToHex(ch.reference));
+}
+
+async function updateData(ch) {
+	console.debug('updatechunk', ch);
+	let dataLength = ch.span.length + ch.data.length;
+	let data = new Uint8Array(dataLength);
+	for (let i = 0; i < ch.span.length; i++) {
+		data[i] = ch.span[i];
+	}
+	for (let i = 0; i < ch.data.length; i++) {
+		data[i+ch.span.length] = ch.data[i];
+	}
+	let h = await bee.uploadChunkData(data, arrayToHex(ch.reference));
 }
 
 // Handle the handshake from the peer that responds to the invitation
@@ -245,14 +266,25 @@ async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promis
 //	}
 
 	const nextSocId = chatSession.tmpFeed.next();
-	const soc = swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed)
+	const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
 
-	const h = swarm.fileSplitter(soc.SetChunk);
-	h.update(publicKeySelf);
-	h.digest();
+	let h = new swarm.fileSplitter(soc.setChunk);
+	h.split(hexToArray(publicKeySelf.substring(2)));
+	updateData(soc.chunk);
+
 	soc.sign();
+	console.debug('valid', userTmp, soc.owner_address);
 
-	const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
+	//h = new swarm.fileSplitter(soc.setChunk);
+	//h.split(hexToArray(publicKeySelf.substring(2)));
+	
+	let chunkData = soc.serializeData();
+	let chunkAddress = soc.getAddress();
+
+	console.debug('data, address', chunkData, chunkAddress);
+
+
+	//const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
 	manifestCallback("", privateKeyTmp);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
@@ -274,11 +306,12 @@ async function startResponse(bzz: Bzz):Promise<string> {
 
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
-	const swarmClient = new SwarmClient({bzz: {
-		url: gatewayAddress,
-		signBytes: signerSelf
-	}});
-	const bzz = swarmClient.bzz;
+//	const swarmClient = new SwarmClient({bzz: {
+//		url: gatewayAddress,
+//		signBytes: signerSelf
+//	}});
+//	const bzz = swarmClient.bzz;
+	const bzz = undefined;
 	let writeIndex = 0;
 	let readIndex = 0;
 	let secretHex = undefined;
@@ -302,7 +335,6 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		}
 		setTimeout(poll, MSGPERIOD, userOther);
 	}
-	console.debug('topictmp', topicTmpArray);
 	return {
 		sendMessage: async (message: string) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
@@ -331,11 +363,12 @@ export function init(params: {
 }) {
 	log = params.logFunction;
 	log('init called');
-	const swarmClient = new SwarmClient({bzz: {
-		url: params.gatewayAddress,
-		signBytes: signerTmp,
-	}});
-	const bzz = swarmClient.bzz;
+//	const swarmClient = new SwarmClient({bzz: {
+//		url: params.gatewayAddress,
+//		signBytes: signerTmp,
+//	}});
+//	const bzz = swarmClient.bzz;
+	const bzz = undefined;
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
