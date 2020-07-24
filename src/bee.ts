@@ -15,7 +15,11 @@ class Client {
 		return bee.uploadChunkData(ch.data, arrayToHex(ch.reference));
 	}
 
-	public downloadChunk(reference):any {
+	public downloadChunk(reference: any):any {
+		// TODO: isReference should be in swarm-lowlevel
+		if (reference == undefined) {
+			throw 'invalid reference';
+		}
 		console.debug('downloadchunk', reference);
 		return bee.downloadChunkData(reference);
 	}

@@ -135,8 +135,13 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 }
 
 async function downloadFromFeed(session:any, wallet:wallet.Wallet, socId:string):Promise<any|Buffer> {
-	throw 'implement downloadfromdfeed!';
-	return Buffer.from([]);
+	let otherAddress = wallet.getAddress('binary');
+	let s = new swarm.soc(socId);
+	s.setOwnerAddress(otherAddress);
+	let socAddress = s.getAddress();
+	return session.client.downloadChunk(arrayToHex(socAddress));
+	//throw 'implement downloadfromdfeed!';
+	//return Buffer.from([]);
 }
 
 //async function checkResponse(bzz: Bzz):Promise<string|undefined> {
