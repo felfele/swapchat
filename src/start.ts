@@ -6,7 +6,7 @@ function logMessage(msg) {
 }
 
 init({
-	gatewayAddress: 'http://localhost:8500/',
+	gatewayAddress: 'http://localhost:8080',
 	messageCallback: logMessage,
 	manifestCallback: () => {},
 	stateCallback: () => {},

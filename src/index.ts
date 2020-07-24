@@ -1,14 +1,10 @@
-//import { SwarmClient, Bzz } from '@erebos/swarm';
-//import { createHex } from '@erebos/swarm';
-//import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
-//import { pubKeyToAddress, hash } from '@erebos/keccak256';
-import * as ec from 'eccrypto';
+import * as ec from 'eccrypto'; // TODO: move derive to wallet
 import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
-import * as bee from 'bee-client';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
 import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix, hash } from './common';
 import { Session } from './session';
+import { Client } from './bee';
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
@@ -227,7 +223,7 @@ async function checkResponse(session: any):Promise<string|undefined> {
 
 async function updateFeed(ch) {
 	console.debug('updatefeed', ch, arrayToHex(ch.reference));
-	let h = await bee.uploadChunkData(ch.data, arrayToHex(ch.reference));
+	let h = await chatSession.client.uploadChunk(ch);
 }
 
 async function updateData(ch) {
@@ -240,7 +236,10 @@ async function updateData(ch) {
 	for (let i = 0; i < ch.data.length; i++) {
 		data[i+ch.span.length] = ch.data[i];
 	}
-	let h = await bee.uploadChunkData(data, arrayToHex(ch.reference));
+	let h = await chatSession.client.uploadChunk({
+		data: data,
+		reference: ch.reference
+	});	
 }
 
 // Handle the handshake from the peer that responds to the invitation
@@ -296,23 +295,14 @@ async function startResponse(session: object):Promise<string> {
 }
 
 
-async function downloadChunk(reference):Promise<any> {
-	return undefined;
-}
-
-async function uploadChunk(data):Promise<any> {
-	return undefined;
-}
-
 const newSession = (gatewayAddress: string, messageCallback: any) => {
 //	const swarmClient = new SwarmClient({bzz: {
 //		url: gatewayAddress,
 //		signBytes: signerSelf
 //	}});
 //	const bzz = swarmClient.bzz;
-	const client =  {
-		'url': gatewayAddress,
-	}
+	const client = new Client(gatewayAddress);
+
 	let writeIndex = 0;
 	let readIndex = 0;
 	let secretHex = undefined;
@@ -324,7 +314,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				const encryptedReference = await downloadFromFeed(client, otherWallet, topicTmp, readIndex);
 				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
 				//const response = await bzz.download(messageReference, {mode: 'raw'});
-				const response = await downloadChunk(messageReference);
+				const response = await client.downloadChunk(messageReference);
 				const encryptedArrayBuffer = await response.arrayBuffer();
 				const message = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
 				readIndex += 1;
@@ -343,7 +333,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	chatSession.sendMessage = async (message: string) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
 			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-			const messageReference = await uploadChunk(Buffer.from(encryptedMessage));
+			const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
 			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
 			const encryptedReferenceBytes = Buffer.from(encryptedReference)
 			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);

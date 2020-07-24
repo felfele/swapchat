@@ -5,6 +5,18 @@ class Client {
 
 	constructor(url:string) {
 		this.url = url;
+		bee.chunkDataEndpoint = this.url + '/chunks';
+	}
+
+	public uploadChunk(ch):any {
+		console.debug('>>>>>>>>>>>>>>>>>>>>>>>', bee.chunkDataEndpoint);
+		console.debug('uploadchunk', ch);
+		return bee.uploadChunkData(ch);
+	}
+
+	public downloadChunk(reference):any {
+		console.debug('downloadchunk', reference);
+		return bee.downloadChunkData(reference);
 	}
 }
 
