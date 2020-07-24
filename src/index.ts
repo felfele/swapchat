@@ -7,6 +7,7 @@ import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
 import * as bee from 'bee-client';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
+import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix } from './common';
 
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
@@ -34,7 +35,6 @@ function getTmpPrivKey(): string | undefined {
 	return undefined;
 }
 
-const stripHexPrefix = (s: string) => s.startsWith("0x") ? s.slice(2) : s;
 
 const encryptAesGcm = async (message: string, secretHex: string): Promise<Uint8Array> => {
 	try {
@@ -73,20 +73,21 @@ const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Prom
 }
 
 // us
-const keyPairSelf = createKeyPair(arrayToHex(newPrivateKey()));
-const privateKeySelf = "0x" + keyPairSelf.getPrivate("hex");
-const publicKeySelf = "0x" + keyPairSelf.getPublic("hex");
-const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
+//const keyPairSelf = createKeyPair(arrayToHex(newPrivateKey()));
+//const privateKeySelf = "0x" + keyPairSelf.getPrivate("hex");
+//const publicKeySelf = "0x" + keyPairSelf.getPublic("hex");
+//const userSelf = pubKeyToAddress(createHex(publicKeySelf).toBuffer());
+const selfWallet = new wallet.Wallet();//Buffer.from(hexToArray(privateKeySelf.substring(2)));
 
 // const privateKeySelf = "0xae402705d028aac6c62ea98a54b5ae763f527c3e14cf84c89a1e4e4ec4d43921";
 // const publicKeySelf = "0x035823ce10d0e06bfc14ff26f50776916fc920c9ce75b5ab8c96e3f395f13d179f";
 // const userSelf = "0xa1615832e7196080d058698a8d85b00bbc2a19dd";
 
-console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
+//console.log('privateKeySelf', {privateKeySelf, publicKeySelf, userSelf});
+console.log('selfWallet', {selfWallet});
 
-const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
-const socSignerSelf = new wallet.Wallet(Buffer.from(hexToArray(privateKeySelf.substring(2))));
-const keyPrivSelf = createHex(privateKeySelf).toBuffer();
+//const signerSelf = async bytes => sign(bytes, privateKeySelf.slice(2));
+//const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // console.log("keyPrivSelf", keyPrivSelf.length);
 
 // the handshake feed
@@ -94,150 +95,133 @@ const keyPrivSelf = createHex(privateKeySelf).toBuffer();
 // const publicKeyTmp = "0x03f0070f8376b33b3216eaab30f3b12919a4876c2bdf2b21e87754d2f4d75abea1";
 // const userTmp = "0x00c13ab42a8650c29998b0a4bb2cd1906128e7de";
 
-let keyPairTmp = undefined;
+//let keyPairTmp = undefined;
+let tmpWallet = undefined;
 if (keyTmpRequestPriv != undefined) {
-	keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
+	//keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
+	tmpWallet = new wallet.Wallet(Buffer.from(hexToArray(keyTmpRequestPriv.substring(2))));
 } else {
-	keyPairTmp = createKeyPair();
+	//keyPairTmp = createKeyPair();
+	tmpWallet = new wallet.Wallet();
 }
 
-const privateKeyTmp = "0x" + keyPairTmp.getPrivate("hex");
-const publicKeyTmp = "0x" + keyPairTmp.getPublic("hex");
-const userTmp = pubKeyToAddress(createHex(publicKeyTmp).toBuffer());
+//const privateKeyTmp = "0x" + keyPairTmp.getPrivate("hex");
+//const publicKeyTmp = "0x" + keyPairTmp.getPublic("hex");
+//const userTmp = pubKeyToAddress(createHex(publicKeyTmp).toBuffer());
 
-const socSignerTmp = new wallet.Wallet(Buffer.from(hexToArray(privateKeyTmp.substring(2))));
-console.log('privateKeyTmp', {privateKeyTmp, publicKeyTmp, userTmp});
+//console.log('privateKeyTmp', {privateKeyTmp, publicKeyTmp, userTmp});
+console.log('tmpWallet', {tmpWallet});
 
 let topicTmp = "0x";
 // BUG: createHex doesn't seem to work for the hash output, annoying!
-let topicTmpArray = hash(Buffer.from(privateKeyTmp));
+//let topicTmpArray = hash(Buffer.from(privateKeyTmp));
+let topicTmpArray = hash(selfWallet.privateKey); //Buffer.from(privateKeyTmp));
 topicTmpArray.forEach(function(k) {
 	let s = "00" + Math.abs(k).toString(16);
 	topicTmp += s.substring(s.length-2, s.length);
-
 });
-const signerTmp = async bytes => sign(bytes, privateKeyTmp.slice(2));
 
 // the peer
-let keyPairOtherPub = undefined;
-let userOther = undefined;
+let otherWallet = undefined;
+//let keyPairOtherPub = undefined;
+//let userOther = undefined;
+
+// the master session
 let chatSession = undefined;
 
 // crypto stuff
-function newPrivateKey() {
-	return ec.generatePrivate();
-}
+//function newPrivateKey() {
+//	return ec.generatePrivate();
+//}
 
-export function hexToArray(data:string):Uint8Array {
-	data = stripHexPrefix(data);
-	let databuf = new ArrayBuffer(data.length / 2);
-	let uintdata = new Uint8Array(databuf);
-	for (var i = 0; i < uintdata.length; i++) {
-		uintdata[i] = parseInt(data.substring(i*2,(i*2)+2), 16);
-	}
-	return uintdata;
-}
 
-function arrayToHex(data:any):string {
-	let hexout = '';
-	data.forEach(function(n) {
-		let h = n.toString(16);
-		if (h.length == 1) {
-			h = "0" + h;
-		}
-		hexout += h;
-	});
-	return hexout;
-}
+//async function uploadToRawFeed(bzz: Bzz, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<void> {
+//	const feedParams = {
+//		user: user,
+//		topic: topic,
+//		time: index,
+//		level: 0,
+//	}
+//
+//	try {
+//		const resp = await bzz.setRawFeedContent(feedParams, data);
+//	} catch (e) {
+//		console.error('uploadToRawFeed', {e});
+//	}
+//}
 
-async function uploadToRawFeed(bzz: Bzz, user: string, topic: string, index: number, data: Uint8Array|string|Buffer): Promise<void> {
-	const feedParams = {
-		user: user,
-		topic: topic,
-		time: index,
-		level: 0,
-	}
-
-	try {
-		const resp = await bzz.setRawFeedContent(feedParams, data);
-	} catch (e) {
-		console.error('uploadToRawFeed', {e});
-	}
-}
-
-async function downloadBufferFromRawFeed(bzz: Bzz, user: string, topic: string, index: number): Promise<Buffer> {
-	const response = await bzz.getRawFeedContent({
-		user,
-		topic,
-		level: 0,
-		time: index,
-	}, {
-		mode: 'raw',
-	});
-	const dataBuffer = await response.arrayBuffer();
-	return dataBuffer;
-}
+//async function downloadBufferFromRawFeed(bzz: Bzz, user: string, topic: string, index: number): Promise<Buffer> {
+//	const response = await bzz.getRawFeedContent({
+//		user,
+//		topic,
+//		level: 0,
+//		time: index,
+//	}, {
+//		mode: 'raw',
+//	});
+//	const dataBuffer = await response.arrayBuffer();
+//	return dataBuffer;
+//}
 
 // if bz is supplied, will update tmp feed
 async function connectToPeer(handshakeOther:string):Promise<string> {
 	// set up the user info for the peer
 	// and start the chat session with that info
 	const otherPub = stripHexPrefix(handshakeOther);
-	keyPairOtherPub = createPublic(otherPub);
-	const pubArray = hexToArray(otherPub);
-	const pubBuffer = Buffer.from(pubArray);
-	console.log(pubArray);
-	console.log(handshakeOther);
-	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
-	console.log(pubBuffer);
+	//keyPairOtherPub = createPublic(otherPub);
+	otherWallet = wallet.newReadOnlyWallet(otherPub);
+	//const pubArray = hexToArray(otherPub);
+	//const pubBuffer = Buffer.from(pubArray);
+	//console.log(pubArray);
+	chatSession.logFunction(handshakeOther);
+
+	//const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
+	//console.log(pubBuffer);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
-	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
-	await chatSession.start(userOther, secret);
-	return userOther;
+	//userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
+	//await chatSession.start(userOther, secret);
+	await chatSession.start(otherWallet.getAddress(), secret);
+	//return userOther;
+	return otherWallet;
 }
 
 async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	// NB these are globalsss
 	const otherPub = stripHexPrefix(handshakeOther);
-	const pubBuffer = Buffer.from(hexToArray(handshakeOther));
-	keyPairOtherPub = createPublic(otherPub);
+	//const pubBuffer = Buffer.from(hexToArray(handshakeOther));
+	//keyPairOtherPub = createPublic(otherPub);
+	otherWallet = wallet.newReadOnlyWallet(otherPub);
 
-	const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	//const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
+	const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
 	const secret = arrayToHex(new Uint8Array(secretBuffer));
 
-	userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
-	const myHash = await uploadToRawFeed(bz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX, publicKeySelf);
-	console.log('connectToPeerTwo', {handshakeOther, userOther})
-	await chatSession.start(userOther, secret);
-	return userOther;
+	//userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
+	//const myHash = await uploadToRawFeed(bz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX, publicKeySelf);
+	//console.log('connectToPeerTwo', {handshakeOther, userOther})
+	//await chatSession.start(userOther, secret);
+	await chatSession.start(otherWallet.getAddress(), secret);
+	//return userOther;
+	return otherWallet;
+}
+
+async function downloadFromFeed(session:any, wallet:wallet.Wallet, topic:string, pidx:number):Promise<any|Buffer> {
+	throw 'implement downloadfromdfeed!';
+	return Buffer.from([]);
 }
 
 async function checkResponse(bzz: Bzz):Promise<string|undefined> {
 	try {
-		const handshakeOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		//const handshakeOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		const handshakeOtherBuffer = await downloadFromFeed(bzz, tmpWallet, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
 		const handshakeOther = Buffer.from(handshakeOtherBuffer).toString();
 		const userOther = await connectToPeer(handshakeOther);
 		return userOther;
 	} catch (e) {
 		return undefined;
 	}
-}
-
-// stolen from https://github.com/felfele/felfele/src/Utils.ts
-async function waitMillisec(ms: number): Promise<number> {
-    return new Promise<number>((resolve, reject) => {
-	if (ms > 0) {
-	    setTimeout(() => resolve(ms), ms);
-	}
-    });
-}
-
-// stolen from https://github.com/felfele/felfele/src/Utils.ts
-async function waitUntil(untilTimestamp: number, now: number = Date.now()): Promise<number> { const diff = untilTimestamp - now; if (diff > 0) {
-	return waitMillisec(diff);
-    }
-    return 0;
 }
 
 async function updateFeed(ch) {
@@ -266,14 +250,15 @@ async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promis
 //	}
 
 	const nextSocId = chatSession.tmpFeed.next();
-	const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
+	//const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
+	const soc = new swarm.soc(nextSocId, undefined, tmpWallet, updateFeed);
 
 	let h = new swarm.fileSplitter(soc.setChunk);
-	h.split(hexToArray(publicKeySelf.substring(2)));
+	//h.split(hexToArray(publicKeySelf.substring(2)));
+	h.split(tmpWallet.publicKey);
 	updateData(soc.chunk);
 
 	soc.sign();
-	console.debug('valid', userTmp, soc.owner_address);
 
 	//h = new swarm.fileSplitter(soc.setChunk);
 	//h.split(hexToArray(publicKeySelf.substring(2)));
@@ -285,7 +270,8 @@ async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promis
 
 
 	//const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
-	manifestCallback("", privateKeyTmp);
+	//manifestCallback("", privateKeyTmp);
+	manifestCallback("", tmpWallet);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(bzz);
@@ -296,14 +282,24 @@ async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promis
 	}
 }
 
-async function startResponse(bzz: Bzz):Promise<string> {
-	const handshakePubOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
+async function startResponse(session: object):Promise<string> {
+	//const handshakePubOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
+	const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
 	const handshakePubOther = Buffer.from(handshakePubOtherBuffer).toString();
 	console.log('handshakePubOther', handshakePubOther);
-	const userOther = await connectToPeerTwo(handshakePubOther, bzz);
+	//const userOther = await connectToPeerTwo(handshakePubOther, bzz);
+	const userOther = await connectToPeerTwo(handshakePubOther, session);
 	return stripHexPrefix(topicTmp);
 }
 
+
+async function downloadChunk(reference):Promise<any> {
+	return undefined;
+}
+
+async function uploadChunk(data):Promise<any> {
+	return undefined;
+}
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
 //	const swarmClient = new SwarmClient({bzz: {
@@ -311,7 +307,9 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 //		signBytes: signerSelf
 //	}});
 //	const bzz = swarmClient.bzz;
-	const bzz = undefined;
+	const client =  {
+		'url': gatewayAddress,
+	}
 	let writeIndex = 0;
 	let readIndex = 0;
 	let secretHex = undefined;
@@ -319,9 +317,11 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		while (true) {
 			try {
 				console.log('poll', userOther, readIndex, secretHex);
-				const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, topicTmp, readIndex);
+				//const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, topicTmp, readIndex);
+				const encryptedReference = await downloadFromFeed(client, otherWallet, topicTmp, readIndex);
 				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
-				const response = await bzz.download(messageReference, {mode: 'raw'});
+				//const response = await bzz.download(messageReference, {mode: 'raw'});
+				const response = await downloadChunk(messageReference);
 				const encryptedArrayBuffer = await response.arrayBuffer();
 				const message = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
 				readIndex += 1;
@@ -338,10 +338,11 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	return {
 		sendMessage: async (message: string) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
-			const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+			const messageReference = await uploadChunk(Buffer.from(encryptedMessage));
 			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
 			const encryptedReferenceBytes = Buffer.from(encryptedReference)
-			const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 			writeIndex += 1;
 		},
 		start: async (userOther: string, secret: string) => {
@@ -369,17 +370,22 @@ export function init(params: {
 //	}});
 //	const bzz = swarmClient.bzz;
 	const bzz = undefined;
+
+
+	// TODO: this guy is global. let's pass him around instead, perhaps?
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
-		startRequest(bzz, params.manifestCallback).then((topicHex) => {
+		//startRequest(bzz, params.manifestCallback).then((topicHex) => {
+		startRequest(chatSession, params.manifestCallback).then((topicHex) => {
 			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
 		});
 	} else {
-		startResponse(bzz).then((topicHex) => {
+		//startResponse(bzz).then((topicHex) => {
+		startResponse(chatSession).then((topicHex) => {
 			params.stateCallback(topicHex);
 		}).catch((e) => {
 			console.error("error starting response: ", e);

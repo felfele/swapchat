@@ -2,7 +2,7 @@ import { init } from './index';
 
 // set up the session object
 function logMessage(msg) {
-	console.log("got message: " + msg.payload());
+	console.debug("got message", msg.payload());
 }
 
 init({
@@ -10,5 +10,5 @@ init({
 	messageCallback: logMessage,
 	manifestCallback: () => {},
 	stateCallback: () => {},
-	logFunction: console.log,
+	logFunction: console.debug,
 });
