@@ -33,7 +33,7 @@
     "dfeeds": "git+file:///home/lash/src/home/dfeeds#a10ffece6b4833483dc8fe850db5a692f788b59f",
     "eccrypto": "^1.1.3",
     "secp256k1": "^3.8.0",
-    "swarm-lowlevel": "git+https://gitlab.com/nolash/swarm-lowlevel-js#b0c81c254a922ee3551fd48c4b83c47996103e0c",
+    "swarm-lowlevel": "git+file:///home/lash/src/home/swarm-lowlevel-js#7acba331ad484bb4bae760eba461a1abe99c321b",
     "bee-client": "git+file:///home/lash/src/ext/swarm/bee-client#56663020f9bf680bd9e0bd5625e0fc31c96fd341"
   }
 }

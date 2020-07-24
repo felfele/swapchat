@@ -18,6 +18,7 @@ class Session {
 		this.sharedFeed = new dfeeds.indexed(topic);
 		this.selfFeed = new dfeeds.indexed(topic);
 		this.otherFeed = new dfeeds.indexed(topic);
+		this.logFunction = console.debug;
 	}
 
 };

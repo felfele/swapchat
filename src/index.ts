@@ -1,4 +1,3 @@
-import * as ec from 'eccrypto'; // TODO: move derive to wallet
 import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
@@ -7,7 +6,7 @@ import { Session } from './session';
 import { Client } from './bee';
 import { encryptAesGcm as encrypt } from './crypto';
 import { decryptAesGcm as decrypt } from './crypto';
-import { hash } from './crypto';
+import { hash, derive } from './crypto';
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
@@ -103,10 +102,10 @@ async function connectToPeer(handshakeOther:string):Promise<string> {
 	//console.log(pubArray);
 	chatSession.logFunction(handshakeOther);
 
-	//const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
-	const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
+	//const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
+	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	//console.log(pubBuffer);
-	const secret = arrayToHex(new Uint8Array(secretBuffer));
+	const secret = arrayToHex(secretBytes);
 
 	//userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
 	//await chatSession.start(userOther, secret);
@@ -123,24 +122,39 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 	otherWallet = wallet.newReadOnlyWallet(otherPub);
 
 	//const secretBuffer = await ec.derive(keyPrivSelf, pubBuffer);
-	const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
-	const secret = arrayToHex(new Uint8Array(secretBuffer));
+	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
+	//const secretBuffer = await ec.derive(selfWallet.privateKey, otherWallet.publicKey);
+	const secret = arrayToHex(secretBytes);
 
 	//userOther = pubKeyToAddress(createHex("0x" + keyPairOtherPub.getPublic('hex')).toBuffer());
 	//const myHash = await uploadToRawFeed(bz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX, publicKeySelf);
 	//console.log('connectToPeerTwo', {handshakeOther, userOther})
 	//await chatSession.start(userOther, secret);
+	const responseSocId = chatSession.sharedFeed.next();
+	const soc = new swarm.soc(responseSocId, undefined, tmpWallet);
+	let h = new swarm.fileSplitter(soc.setChunk);
+	h.split(selfWallet.publicKey);
+
+	soc.sign();
+
+	let chunkData = soc.serializeData();
+	let chunkAddress = soc.getAddress();
+	let resultAddress = await updateFeed({
+		data: chunkData,
+		reference: chunkAddress,
+	});
+
 	await chatSession.start(otherWallet.getAddress(), secret);
 	//return userOther;
 	return otherWallet;
 }
 
-async function downloadFromFeed(session:any, wallet:wallet.Wallet, socId:string):Promise<any|Buffer> {
+async function downloadFromFeed(session: any, wallet: wallet.Wallet, socId:string):Promise<any|Buffer> {
 	let otherAddress = wallet.getAddress('binary');
-	let s = new swarm.soc(socId);
+	let s = new swarm.soc(socId, undefined, undefined);
 	s.setOwnerAddress(otherAddress);
 	let socAddress = s.getAddress();
-	return session.client.downloadChunk(arrayToHex(socAddress));
+	return await chatSession.client.downloadChunk(arrayToHex(socAddress));
 	//throw 'implement downloadfromdfeed!';
 	//return Buffer.from([]);
 }
@@ -188,7 +202,7 @@ async function startRequest(session: Session, manifestCallback: ManifestCallback
 	const soc = new swarm.soc(requestSocId, undefined, tmpWallet);
 
 	let h = new swarm.fileSplitter(soc.setChunk);
-	h.split(tmpWallet.publicKey);
+	h.split(selfWallet.publicKey);
 
 	soc.sign();
 

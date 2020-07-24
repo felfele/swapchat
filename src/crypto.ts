@@ -1,3 +1,4 @@
+import * as ec from 'eccrypto'; // TODO: move derive to wallet
 import * as keccak from 'keccak';
 
 import { hexToArray, stripHexPrefix } from './common';
@@ -43,3 +44,9 @@ export function hash(data):Uint8Array {
 	return new Uint8Array(h.digest());	
 }
 
+export async function derive(priv, pub):Promise<any> {
+	const secretBuffer = await ec.derive(Buffer.from(priv), Buffer.from(pub));
+	return new Promise((whohoo, doh) => {
+		whohoo(new Uint8Array(secretBuffer));
+	});
+}
