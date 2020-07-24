@@ -198,6 +198,34 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const client = new Client(gatewayAddress);
 
 	let secretHex = undefined;
+	const sendEnvelope = async (envelope) => {
+		const envelopeJson = JSON.stringify(envelope)
+		const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
+		const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+		const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+		const encryptedReferenceBytes = Buffer.from(encryptedReference)
+		const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+		writeIndex += 1;
+	}
+	const sendMessage = async (message: string) => {
+		const envelope = {
+			type: 'message',
+			message,
+		}
+		return sendEnvelope(envelope)
+	}
+	const sendPing = () => {
+		const envelope = {
+			type: 'ping',
+		}
+		return sendEnvelope(envelope)
+	}
+	const sendDisconnect = () => {
+		const envelope = {
+			type: 'disconnect',
+		}
+		return sendEnvelope(envelope)
+	}
 	const poll = async (otherFeed: any) => {
 		while (true) {
 			try {
@@ -252,7 +280,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	chatSession.start = async (userOther: string, secret: string) => {
 			secretHex = secret;
 			await poll(chatSession.otherFeed);
-		};
+	};
 	return chatSession;
 }
 
@@ -294,6 +322,14 @@ export function init(params: {
 export function send(message: string) {
 	try {
 		chatSession.sendMessage(message);
+	} catch(e) {
+		console.error(e);
+	}
+}
+
+export function disconnect() {
+	try {
+		chatSession.sendDisconnect();
 	} catch(e) {
 		console.error(e);
 	}
