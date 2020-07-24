@@ -1,21 +1,20 @@
-import { SwarmClient, Bzz } from '@erebos/swarm';
-import { createHex } from '@erebos/swarm';
-import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
-import { pubKeyToAddress, hash } from '@erebos/keccak256';
+//import { SwarmClient, Bzz } from '@erebos/swarm';
+//import { createHex } from '@erebos/swarm';
+//import { createKeyPair, createPublic, sign } from '@erebos/secp256k1';
+//import { pubKeyToAddress, hash } from '@erebos/keccak256';
 import * as ec from 'eccrypto';
 import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
 import * as bee from 'bee-client';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
-import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix } from './common';
+import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix, hash } from './common';
 
+type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
+type StateCallback = (topicHex: string) => void;
 
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
 const MSGPERIOD = 1000;
-
-type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
-type StateCallback = (topicHex: string) => void;
 
 let log = console.log;
 let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
@@ -212,10 +211,11 @@ async function downloadFromFeed(session:any, wallet:wallet.Wallet, topic:string,
 	return Buffer.from([]);
 }
 
-async function checkResponse(bzz: Bzz):Promise<string|undefined> {
+//async function checkResponse(bzz: Bzz):Promise<string|undefined> {
+async function checkResponse(session: any):Promise<string|undefined> {
 	try {
 		//const handshakeOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
-		const handshakeOtherBuffer = await downloadFromFeed(bzz, tmpWallet, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
+		const handshakeOtherBuffer = await downloadFromFeed(session, tmpWallet, topicTmp, RESPONSE_PUBLIC_KEY_INDEX);
 		const handshakeOther = Buffer.from(handshakeOtherBuffer).toString();
 		const userOther = await connectToPeer(handshakeOther);
 		return userOther;
@@ -243,7 +243,8 @@ async function updateData(ch) {
 }
 
 // Handle the handshake from the peer that responds to the invitation
-async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
+//async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
+async function startRequest(session: any, manifestCallback: ManifestCallback):Promise<string> {
 //	let publicKeySelfChunk = undefined;
 //	function cb(ch) {
 //		publicKeySelfChunk = ch;
@@ -274,7 +275,8 @@ async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promis
 	manifestCallback("", tmpWallet);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
-		const userOther = await checkResponse(bzz);
+		//const userOther = await checkResponse(bzz);
+		const userOther = await checkResponse(session);
 		if (userOther !== undefined) {
 			return stripHexPrefix(topicTmp);
 		}
