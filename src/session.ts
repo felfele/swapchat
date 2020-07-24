@@ -1,4 +1,4 @@
-
+import { Client } from './bee';
 
 class Session {
 	initialized: boolean;

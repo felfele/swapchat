@@ -8,6 +8,7 @@ import * as swarm from 'swarm-lowlevel';
 import * as bee from 'bee-client';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
 import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix, hash } from './common';
+import { Session } from './session';
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
@@ -250,7 +251,7 @@ async function startRequest(session: any, manifestCallback: ManifestCallback):Pr
 //		publicKeySelfChunk = ch;
 //	}
 
-	const nextSocId = chatSession.tmpFeed.next();
+	const nextSocId = chatSession.sharedFeed.next();
 	//const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
 	const soc = new swarm.soc(nextSocId, undefined, tmpWallet, updateFeed);
 
@@ -337,8 +338,9 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		}
 		setTimeout(poll, MSGPERIOD, userOther);
 	}
-	return {
-		sendMessage: async (message: string) => {
+	const tmpFeed = new dfeeds.indexed(topicTmpArray);
+	chatSession = new Session(client, tmpFeed);
+	chatSession.sendMessage = async (message: string) => {
 			const encryptedMessage = await encryptAesGcm(message, secretHex);
 			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
 			const messageReference = await uploadChunk(Buffer.from(encryptedMessage));
@@ -346,15 +348,12 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 			const encryptedReferenceBytes = Buffer.from(encryptedReference)
 			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 			writeIndex += 1;
-		},
-		start: async (userOther: string, secret: string) => {
+		};
+	chatSession.start = async (userOther: string, secret: string) => {
 			secretHex = secret;
 			await poll(userOther);
-		},
-		selfFeed: undefined,
-		otherFeed: undefined,
-		tmpFeed: new dfeeds.indexed(topicTmpArray),
-	}
+		};
+	return chatSession;
 }
 
 export function init(params: {
@@ -372,7 +371,6 @@ export function init(params: {
 //	}});
 //	const bzz = swarmClient.bzz;
 	const bzz = undefined;
-
 
 	// TODO: this guy is global. let's pass him around instead, perhaps?
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
