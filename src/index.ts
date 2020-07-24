@@ -200,12 +200,13 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	let secretHex = undefined;
 	const sendEnvelope = async (envelope) => {
 		const envelopeJson = JSON.stringify(envelope)
-		const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
-		const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-		const encryptedReference = await encryptAesGcm(messageReference, secretHex);
-		const encryptedReferenceBytes = Buffer.from(encryptedReference)
-		const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
-		writeIndex += 1;
+		//const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
+		//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+		//const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+		//const encryptedReferenceBytes = Buffer.from(encryptedReference)
+		//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+		console.debug('I would have sent this message', envelope);
+		//writeIndex += 1;
 	}
 	const sendMessage = async (message: string) => {
 		const envelope = {
