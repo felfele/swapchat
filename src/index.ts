@@ -53,6 +53,7 @@ console.log('tmpWallet', arrayToHex(tmpWallet.privateKey));
 // the peer
 let otherWallet = undefined;
 
+//let topicTmpArray = hash(tmpWallet.privateKey);
 let topicTmpArray = hash(tmpWallet.privateKey);
 topicTmpArray = topicTmpArray.slice(0, 20); // soc definitions warranted 20 byte topicid
 //topicTmpArray = selfWallet.getAddress('binary'); // we could even choose this then
@@ -225,7 +226,7 @@ async function startResponse(session: object):Promise<any> {
 	//const handshakePubOtherBuffer = await downloadBufferFromRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX);
 
 	let f = chatSession.sharedFeed;
-	f.skip(1);
+	//f.skip(1);
 	let responseSocId = f.next();
 
 	const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, responseSocId); //topicTmp, REQUEST_PUBLIC_KEY_INDEX);
