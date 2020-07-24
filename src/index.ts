@@ -17,9 +17,8 @@ const RESPONSE_PUBLIC_KEY_INDEX = 1;
 const MSGPERIOD = 1000;
 
 let log = console.log;
-let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
 
-function getTmpPrivKey(): string | undefined {
+function getTmpPrivKey(): any {
 	if (typeof window !== 'undefined' && window != null && window.location != null && window.location.search != null && window.location.search.length > 0) {
 		const key = window.location.search.slice(1);
 		// console.log("using tmpPrivKey from browser: " + key);
@@ -27,32 +26,37 @@ function getTmpPrivKey(): string | undefined {
 	}
 	// dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
 	if (process.argv.length > 2) {
-		const tmpPrivKey = process.argv[2];
-		// console.log("using tmpkey from cli: " + tmpPrivKey);
-		return tmpPrivKey;
+		let tmpPrivKey = process.argv[2];
+		tmpPrivKey = stripHexPrefix(tmpPrivKey);
+		console.debug("using tmpkey from cli: " + tmpPrivKey);
+		return hexToArray(tmpPrivKey);
 	}
 	return undefined;
 }
+let keyTmpRequestPriv = getTmpPrivKey();	// the private key of the feed used to inform chat requester about responder user
 
 const selfWallet = new wallet.Wallet();//Buffer.from(hexToArray(privateKeySelf.substring(2)));
-console.log('selfWallet', {selfWallet});
+//console.log('selfWallet', selfWallet, arrayToHex(selfWallet.privateKey));
+console.log('selfWallet', arrayToHex(selfWallet.privateKey));
 
 let tmpWallet = undefined;
 if (keyTmpRequestPriv != undefined) {
 	//keyPairTmp = createKeyPair(keyTmpRequestPriv && stripHexPrefix(keyTmpRequestPriv));
-	tmpWallet = new wallet.Wallet(Buffer.from(hexToArray(keyTmpRequestPriv.substring(2))));
+	tmpWallet = new wallet.Wallet(Buffer.from(keyTmpRequestPriv));
 } else {
 	//keyPairTmp = createKeyPair();
 	tmpWallet = new wallet.Wallet();
 }
-console.log('tmpWallet', {tmpWallet});
+//console.log('tmpWallet', tmpWallet, arrayToHex(tmpWallet.privateKey));
+console.log('tmpWallet', arrayToHex(tmpWallet.privateKey));
 
 // the peer
 let otherWallet = undefined;
 
-let topicTmpArray = hash(selfWallet.privateKey);
+let topicTmpArray = hash(tmpWallet.privateKey);
 topicTmpArray = topicTmpArray.slice(0, 20); // soc definitions warranted 20 byte topicid
 //topicTmpArray = selfWallet.getAddress('binary'); // we could even choose this then
+console.log('topic', arrayToHex(topicTmpArray)); 
 
 // the master session
 let chatSession = undefined;
