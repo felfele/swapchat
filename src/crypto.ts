@@ -3,6 +3,10 @@ import * as keccak from 'keccak';
 
 import { hexToArray, stripHexPrefix } from './common';
 
+// TODO remove nodejs hack
+const crypto = require('crypto');
+crypto.getRandomValues = crypto.randomBytes
+
 export const encryptAesGcm = async (message: string, secretHex: string): Promise<Uint8Array> => {
 	try {
 		const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -41,7 +45,7 @@ export const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string
 export function hash(data):Uint8Array {
 	const h = keccak('keccak256');
 	h.update(Buffer.from(data));
-	return new Uint8Array(h.digest());	
+	return new Uint8Array(h.digest());
 }
 
 export async function derive(priv, pub):Promise<any> {

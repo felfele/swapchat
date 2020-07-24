@@ -12,15 +12,17 @@ class Session {
 	otherFeed: undefined;
 	sharedFeed: undefined;
 
-	constructor(client: any, topic: any) {
+	constructor(client: any, topic: any, address) {
 		this.initialized = false;
 		this.client = client;
 		this.sharedFeed = new dfeeds.indexed(topic);
-		this.selfFeed = new dfeeds.indexed(topic);
-		this.otherFeed = new dfeeds.indexed(topic);
+		this.selfFeed = new dfeeds.indexed(address);
 		this.logFunction = console.debug;
 	}
 
+	public setOtherFeed(address) {
+		this.otherFeed = new dfeeds.indexed(address);
+	}
 };
 
 export { Session };

@@ -34,7 +34,7 @@ function getTmpPrivKey(): any {
 }
 
 // the private key of the feed used to inform chat requester about responder user
-let keyTmpRequestPriv = getTmpPrivKey();	
+let keyTmpRequestPriv = getTmpPrivKey();
 
 const selfWallet = new wallet.Wallet();//Buffer.from(hexToArray(privateKeySelf.substring(2)));
 console.log('selfWallet', arrayToHex(selfWallet.privateKey));
@@ -52,10 +52,10 @@ let otherWallet = undefined;
 
 let topicTmpArray = hash(tmpWallet.privateKey);
 // soc definitions warranted 20 byte topicid
-topicTmpArray = topicTmpArray.slice(0, 20); 
+topicTmpArray = topicTmpArray.slice(0, 20);
 // we could even choose this then
 // topicTmpArray = selfWallet.getAddress('binary');
-console.log('topic', arrayToHex(topicTmpArray)); 
+console.log('topic', arrayToHex(topicTmpArray));
 
 // the master session
 let chatSession = undefined;
@@ -72,6 +72,7 @@ async function connectToPeer(handshakeOther:string):Promise<string> {
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	const secret = arrayToHex(secretBytes);
 
+	chatSession.setOtherFeed(otherWallet.getAddress('binary'))
 	await chatSession.start(otherWallet.getAddress(), secret);
 	return otherWallet;
 }
@@ -98,6 +99,7 @@ async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
 		reference: chunkAddress,
 	});
 
+	chatSession.setOtherFeed(otherWallet.getAddress('binary'))
 	await chatSession.start(otherWallet.getAddress(), secret);
 	return otherWallet;
 }
@@ -140,7 +142,7 @@ async function updateData(ch) {
 	let h = await chatSession.client.uploadChunk({
 		data: data,
 		reference: ch.reference
-	});	
+	});
 }
 
 // Handle the handshake from the peer that responds to the invitation
@@ -217,16 +219,35 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				break;
 			}
 		}
-		setTimeout(poll, MSGPERIOD, userOther);
+		setTimeout(poll, MSGPERIOD, userOther, otherFeed);
 	}
-	chatSession = new Session(client, topicTmpArray);
+	const address = selfWallet.getAddress('binary')
+	chatSession = new Session(client, topicTmpArray, address);
 	chatSession.sendMessage = async (message: string) => {
-			const encryptedMessage = await encrypt(message, secretHex);
+			// const encryptedMessage = await encrypt(message, secretHex);
+			const encryptedMessage = new TextEncoder().encode(message);
+
 			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-			const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
-			const encryptedReference = await encrypt(messageReference, secretHex);
-			const encryptedReferenceBytes = Buffer.from(encryptedReference)
+			// const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
+			// const encryptedReference = await encrypt(messageReference, secretHex);
+			// const encryptedReferenceBytes = Buffer.from(encryptedReference)
 			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+
+			const otherSocId = chatSession.selfFeed.next();
+			const soc = new swarm.soc(otherSocId, undefined, selfWallet);
+
+			let h = new swarm.fileSplitter(soc.setChunk);
+			h.split(encryptedMessage);
+
+			soc.sign();
+
+			let chunkData = soc.serializeData();
+			let chunkAddress = soc.getAddress();
+			let resultAddress = await updateFeed({
+				data: chunkData,
+				reference: chunkAddress,
+			});
+
 			writeIndex += 1;
 		};
 	// TODO: move def to session, with polling as part of constructor
@@ -253,6 +274,7 @@ export function init(params: {
 		log('start request');
 		startRequest(chatSession, params.manifestCallback).then((topicHex) => {
 			params.stateCallback(topicHex);
+			setTimeout(() => chatSession.sendMessage("alice"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
@@ -260,6 +282,7 @@ export function init(params: {
 	} else {
 		startResponse(chatSession).then((topicHex) => {
 			params.stateCallback(topicHex);
+			setTimeout(() => chatSession.sendMessage("bob"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting response: ", e);
 			log("error starting response: ", e);
