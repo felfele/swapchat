@@ -37,7 +37,9 @@ function getTmpPrivKey(): any {
 let keyTmpRequestPriv = getTmpPrivKey();
 
 const selfWallet = new wallet.Wallet();//Buffer.from(hexToArray(privateKeySelf.substring(2)));
-console.log('selfWallet', arrayToHex(selfWallet.privateKey));
+console.log('selfWallet private', arrayToHex(selfWallet.privateKey));
+console.log('selfWallet public', arrayToHex(selfWallet.publicKey));
+console.log('selfWallet address', selfWallet.getAddress());
 
 let tmpWallet = undefined;
 if (keyTmpRequestPriv != undefined) {
@@ -62,12 +64,10 @@ let chatSession = undefined;
 
 
 // if bz is supplied, will update tmp feed
-async function connectToPeer(handshakeOther:string):Promise<string> {
+async function connectToPeer(handshakeOther:any) {
 	// set up the user info for the peer
 	// and start the chat session with that info
-	const otherPub = stripHexPrefix(handshakeOther);
-	otherWallet = wallet.newReadOnlyWallet(otherPub);
-	chatSession.logFunction(handshakeOther);
+	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
 
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	const secret = arrayToHex(secretBytes);
@@ -77,10 +77,9 @@ async function connectToPeer(handshakeOther:string):Promise<string> {
 	return otherWallet;
 }
 
-async function connectToPeerTwo(handshakeOther:string, bz:any):Promise<string> {
+async function connectToPeerTwo(handshakeOther:any) {
 	// NB these are globalsss
-	const otherPub = stripHexPrefix(handshakeOther);
-	otherWallet = wallet.newReadOnlyWallet(otherPub);
+	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
 
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	const secret = arrayToHex(secretBytes);
@@ -115,22 +114,23 @@ async function downloadFromFeed(session: any, wallet: wallet.Wallet, socId:strin
 async function checkResponse(session: any, socId: any):Promise<string|undefined> {
 	try {
 		const handshakeOtherBuffer = await downloadFromFeed(session, tmpWallet, socId);
-		const handshakeOther = Buffer.from(handshakeOtherBuffer).toString();
-		const userOther = await connectToPeer(handshakeOther);
+		const soc = swarm.socFromSocChunk({
+			data: new Uint8Array(handshakeOtherBuffer)
+		});
+		const userOther = await connectToPeer(soc.chunk.data);
 		return userOther;
 	} catch (e) {
-		console.error('checkresponse croak', e);
+		console.error('no response yet...');
 		return undefined;
 	}
 }
 
 async function updateFeed(ch) {
-	console.debug('updatefeed', ch, arrayToHex(ch.reference));
 	return await chatSession.client.uploadChunk(ch);
 }
 
 async function updateData(ch) {
-	console.debug('updatechunk', ch);
+	//console.debug('updatechunk', ch);
 	let dataLength = ch.span.length + ch.data.length;
 	let data = new Uint8Array(dataLength);
 	for (let i = 0; i < ch.span.length; i++) {
@@ -163,20 +163,17 @@ async function startRequest(session: Session, manifestCallback: ManifestCallback
 		reference: chunkAddress,
 	});
 
-	console.debug('data, address', chunkData, chunkAddress, resultAddress);
-
 	let privateKeyHex = arrayToHex(tmpWallet.privateKey);
-	console.debug('calling manifest back', privateKeyHex);
 	manifestCallback("", privateKeyHex);
 	const bobSocId = chatSession.sharedFeed.next();
 
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
-		//const userOther = await checkResponse(bzz);
 		const userOther = await checkResponse(session, bobSocId);
 		if (userOther !== undefined) {
-			//return stripHexPrefix(topicTmp);
-			return topicTmpArray;
+			return new Promise((whohoo, doh) => {
+				whohoo();	
+			});
 		}
 		await waitUntil(nextCheckTime);
 	}
@@ -187,45 +184,48 @@ async function startResponse(session: object):Promise<any> {
 	let aliceSocId = f.next();
 
 	const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, aliceSocId); //topicTmp, REQUEST_PUBLIC_KEY_INDEX);
-	const handshakePubOther = Buffer.from(handshakePubOtherBuffer).toString();
-	console.log('handshakePubOther', handshakePubOther);
-	const userOther = await connectToPeerTwo(handshakePubOther, session);
-	return topicTmpArray;
+	const soc = swarm.socFromSocChunk({
+		data: new Uint8Array(handshakePubOtherBuffer)
+	});
+	const userOther = await connectToPeerTwo(soc.chunk.data);
+	return new Promise((whohoo, doh) => {
+		whohoo();
+	});
 }
 
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const client = new Client(gatewayAddress);
 
-	let writeIndex = 0;
-	let readIndex = 0;
 	let secretHex = undefined;
-	const poll = async (userOther: string, otherFeed: any) => {
+	const poll = async (otherFeed: any) => {
 		while (true) {
 			try {
 				let socId = otherFeed.current();
-				console.log('poll', userOther, readIndex, secretHex);
-				const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
-				const messageReference = await decrypt(encryptedReference, secretHex);
-				const response = await client.downloadChunk(messageReference);
-				const encryptedArrayBuffer = await response.arrayBuffer();
-				const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
+				console.debug('poll', arrayToHex(socId), arrayToHex(otherFeed.topic), otherFeed.index, arrayToHex(otherWallet.publicKey));
+				const message = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
+				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
+				//const messageReference = await decrypt(encryptedReference, secretHex);
+				//const response = await client.downloadChunk(messageReference);
+				//const encryptedArrayBuffer = await response.arrayBuffer();
+				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
+				console.debug('got', message);
 				otherFeed.next();
 				messageCallback({
 					payload: () => message,
 				});
 			} catch (e) {
-				console.log('poll failed', e);
+				console.log('polled in vain for ' + otherFeed.index + '...');
 				break;
 			}
 		}
-		setTimeout(poll, MSGPERIOD, userOther, otherFeed);
+		setTimeout(poll, MSGPERIOD, otherFeed);
 	}
 	const address = selfWallet.getAddress('binary')
 	chatSession = new Session(client, topicTmpArray, address);
 	chatSession.sendMessage = async (message: string) => {
 			// const encryptedMessage = await encrypt(message, secretHex);
-			const encryptedMessage = new TextEncoder().encode(message);
+			//const encryptedMessage = new TextEncoder().encode(message);
 
 			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
 			// const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
@@ -237,7 +237,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 			const soc = new swarm.soc(otherSocId, undefined, selfWallet);
 
 			let h = new swarm.fileSplitter(soc.setChunk);
-			h.split(encryptedMessage);
+			h.split(message);
 
 			soc.sign();
 
@@ -247,13 +247,11 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				data: chunkData,
 				reference: chunkAddress,
 			});
-
-			writeIndex += 1;
 		};
 	// TODO: move def to session, with polling as part of constructor
 	chatSession.start = async (userOther: string, secret: string) => {
 			secretHex = secret;
-			await poll(userOther, chatSession.otherFeed);
+			await poll(chatSession.otherFeed);
 		};
 	return chatSession;
 }
@@ -272,7 +270,8 @@ export function init(params: {
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
-		startRequest(chatSession, params.manifestCallback).then((topicHex) => {
+		startRequest(chatSession, params.manifestCallback).then(() => {
+			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
 			setTimeout(() => chatSession.sendMessage("alice"), 5 * 1000)
 		}).catch((e) => {
@@ -280,7 +279,9 @@ export function init(params: {
 			log("error starting request: ", e);
 		});
 	} else {
-		startResponse(chatSession).then((topicHex) => {
+		log('start response');
+		startResponse(chatSession).then(() => {
+			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
 			setTimeout(() => chatSession.sendMessage("bob"), 5 * 1000)
 		}).catch((e) => {
