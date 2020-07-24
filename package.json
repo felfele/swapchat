@@ -34,6 +34,6 @@
     "eccrypto": "^1.1.3",
     "secp256k1": "^3.8.0",
     "swarm-lowlevel": "git+https://gitlab.com/nolash/swarm-lowlevel-js",
-    "bee-client": "git+https://github.com/nolash/bee-client.git"
+    "bee-client": "git+https://github.com/nolash/bee-client.git#nolash/chunk-endpoint-rename"
   }
 }
