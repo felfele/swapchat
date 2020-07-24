@@ -245,10 +245,6 @@ async function updateData(ch) {
 // Handle the handshake from the peer that responds to the invitation
 //async function startRequest(bzz: Bzz, manifestCallback: ManifestCallback):Promise<string> {
 async function startRequest(session: any, manifestCallback: ManifestCallback):Promise<string> {
-//	let publicKeySelfChunk = undefined;
-//	function cb(ch) {
-//		publicKeySelfChunk = ch;
-//	}
 
 	const nextSocId = chatSession.sharedFeed.next();
 	//const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
@@ -296,11 +292,6 @@ async function startResponse(session: object):Promise<string> {
 
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
-//	const swarmClient = new SwarmClient({bzz: {
-//		url: gatewayAddress,
-//		signBytes: signerSelf
-//	}});
-//	const bzz = swarmClient.bzz;
 	const client = new Client(gatewayAddress);
 
 	let writeIndex = 0;
@@ -355,12 +346,6 @@ export function init(params: {
 }) {
 	log = params.logFunction;
 	log('init called');
-//	const swarmClient = new SwarmClient({bzz: {
-//		url: params.gatewayAddress,
-//		signBytes: signerTmp,
-//	}});
-//	const bzz = swarmClient.bzz;
-	const bzz = undefined;
 
 	// TODO: this guy is global. let's pass him around instead, perhaps?
 	chatSession = newSession(params.gatewayAddress, params.messageCallback);
