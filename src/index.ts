@@ -2,9 +2,12 @@ import * as ec from 'eccrypto'; // TODO: move derive to wallet
 import * as dfeeds from 'dfeeds';
 import * as swarm from 'swarm-lowlevel';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
-import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix, hash } from './common';
+import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix } from './common';
 import { Session } from './session';
 import { Client } from './bee';
+import { encryptAesGcm as encrypt } from './crypto';
+import { decryptAesGcm as decrypt } from './crypto';
+import { hash } from './crypto';
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
@@ -31,42 +34,6 @@ function getTmpPrivKey(): string | undefined {
 	return undefined;
 }
 
-
-const encryptAesGcm = async (message: string, secretHex: string): Promise<Uint8Array> => {
-	try {
-		const iv = crypto.getRandomValues(new Uint8Array(12));
-		const secretArray = hexToArray(stripHexPrefix(secretHex));
-		const data = new TextEncoder().encode(message);
-		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
-		const ciphertext = await crypto.subtle.encrypt({
-			name: 'AES-GCM',
-			iv,
-		}, secretKey, data);
-		const payload = new Uint8Array(iv.length + ciphertext.byteLength);
-		payload.set(iv);
-		payload.set(new Uint8Array(ciphertext), 12);
-		return payload;
-	} catch (e) {
-		console.log('encryptAesGcm', {e});
-	}
-}
-
-const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Promise<string> => {
-	try {
-		const iv = encryptedData.slice(0, 12);
-		const ciphertext = encryptedData.slice(12);
-		const secretArray = hexToArray(secretHex);
-		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
-		const cleartext = await crypto.subtle.decrypt({
-			name: 'AES-GCM',
-			iv,
-		}, secretKey, ciphertext);
-		const message = new TextDecoder().decode(cleartext);
-		return message;
-	} catch (e) {
-		console.log('decryptAesGcm', {e});
-	}
-}
 
 // us
 //const keyPairSelf = createKeyPair(arrayToHex(newPrivateKey()));
@@ -224,7 +191,7 @@ async function checkResponse(session: any):Promise<string|undefined> {
 
 async function updateFeed(ch) {
 	console.debug('updatefeed', ch, arrayToHex(ch.reference));
-	let h = await chatSession.client.uploadChunk(ch);
+	return await chatSession.client.uploadChunk(ch);
 }
 
 async function updateData(ch) {
@@ -249,7 +216,7 @@ async function startRequest(session: any, manifestCallback: ManifestCallback):Pr
 
 	const nextSocId = chatSession.sharedFeed.next();
 	//const soc = new swarm.soc(nextSocId, undefined, socSignerTmp, updateFeed);
-	const soc = new swarm.soc(nextSocId, undefined, tmpWallet, updateFeed);
+	const soc = new swarm.soc(nextSocId, undefined, tmpWallet);//, updateFeed);
 
 	let h = new swarm.fileSplitter(soc.setChunk);
 	//h.split(hexToArray(publicKeySelf.substring(2)));
@@ -263,13 +230,19 @@ async function startRequest(session: any, manifestCallback: ManifestCallback):Pr
 	
 	let chunkData = soc.serializeData();
 	let chunkAddress = soc.getAddress();
+	let resultAddress = await updateFeed({
+		data: chunkData,
+		reference: chunkAddress,
+	});
 
-	console.debug('data, address', chunkData, chunkAddress);
-
+	console.debug('data, address', chunkData, chunkAddress, resultAddress);
 
 	//const myOtherHash = await uploadToRawFeed(bzz, userTmp, topicTmp, REQUEST_PUBLIC_KEY_INDEX, publicKeySelf);
+	// TODO: make hex
 	//manifestCallback("", privateKeyTmp);
-	manifestCallback("", tmpWallet);
+
+	let privateKeyHex = arrayToHex(tmpWallet.privateKey);
+	manifestCallback("", privateKeyHex);
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
 		//const userOther = await checkResponse(bzz);
@@ -304,11 +277,11 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				console.log('poll', userOther, readIndex, secretHex);
 				//const encryptedReference = await downloadBufferFromRawFeed(bzz, userOther, topicTmp, readIndex);
 				const encryptedReference = await downloadFromFeed(client, otherWallet, topicTmp, readIndex);
-				const messageReference = await decryptAesGcm(encryptedReference, secretHex);
+				const messageReference = await decrypt(encryptedReference, secretHex);
 				//const response = await bzz.download(messageReference, {mode: 'raw'});
 				const response = await client.downloadChunk(messageReference);
 				const encryptedArrayBuffer = await response.arrayBuffer();
-				const message = await decryptAesGcm(new Uint8Array(encryptedArrayBuffer), secretHex);
+				const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				readIndex += 1;
 				messageCallback({
 					payload: () => message,
@@ -323,10 +296,10 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const tmpFeed = new dfeeds.indexed(topicTmpArray);
 	chatSession = new Session(client, tmpFeed);
 	chatSession.sendMessage = async (message: string) => {
-			const encryptedMessage = await encryptAesGcm(message, secretHex);
+			const encryptedMessage = await encrypt(message, secretHex);
 			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
 			const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
-			const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+			const encryptedReference = await encrypt(messageReference, secretHex);
 			const encryptedReferenceBytes = Buffer.from(encryptedReference)
 			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 			writeIndex += 1;

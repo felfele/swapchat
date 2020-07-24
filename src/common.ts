@@ -1,5 +1,3 @@
-const keccak = require('keccak');
-
 export const stripHexPrefix = (s: string) => s.startsWith("0x") ? s.slice(2) : s;
 
 export function hexToArray(data:string):Uint8Array {
@@ -40,8 +38,3 @@ export async function waitUntil(untilTimestamp: number, now: number = Date.now()
     return 0;
 }
 
-export function hash(data):Uint8Array {
-	const h = keccak('keccak256');
-	h.update(Buffer.from(data));
-	return new Uint8Array(h.digest());	
-}
