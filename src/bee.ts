@@ -1,4 +1,5 @@
 import * as bee from 'bee-client';
+import { arrayToHex } from './common';
 
 class Client {
 	url: string;
@@ -11,7 +12,7 @@ class Client {
 	public uploadChunk(ch):any {
 		console.debug('>>>>>>>>>>>>>>>>>>>>>>>', bee.chunkDataEndpoint);
 		console.debug('uploadchunk', ch);
-		return bee.uploadChunkData(ch);
+		return bee.uploadChunkData(ch.data, arrayToHex(ch.reference));
 	}
 
 	public downloadChunk(reference):any {
