@@ -217,6 +217,7 @@ async function checkResponse(session: any):Promise<string|undefined> {
 		const userOther = await connectToPeer(handshakeOther);
 		return userOther;
 	} catch (e) {
+		console.error('checkresponse croak', e);
 		return undefined;
 	}
 }
