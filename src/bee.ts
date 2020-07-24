@@ -1,18 +1,19 @@
-import * as bee from 'bee-client';
+import { BeeClient } from 'bee-client-lib';
 import { arrayToHex, hexToArray } from './common';
 
 class Client {
 	url: string;
+	client: BeeClient;
 
 	constructor(url:string) {
 		this.url = url;
-		bee.chunkDataEndpoint = this.url + '/chunks';
+		this.client = new BeeClient(this.url + '/chunks');
 	}
 
 	// TODO: transform result to array
 	public uploadChunk(ch):any {
 		console.debug('uploadchunk', ch);
-		return bee.uploadChunkData(ch.data, arrayToHex(ch.reference));
+		return this.client.uploadChunkData(ch.data, arrayToHex(ch.reference));
 	}
 
 	public downloadChunk(reference: any) {
@@ -21,7 +22,7 @@ class Client {
 			throw 'invalid reference';
 		}
 		console.debug('downloadchunk', reference);
-		return bee.downloadChunkData(reference);
+		return this.client.downloadChunkData(reference);
 	}
 }
 
