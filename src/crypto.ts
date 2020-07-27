@@ -51,8 +51,5 @@ export function hash(data):Uint8Array {
 export async function derive(priv, pub) {
 	console.debug('derive', priv, pub);
 	const secretBuffer = await ec.derive(Buffer.from(priv), Buffer.from(pub));
-	//return new Promise((whohoo, doh) => {
-	//	whohoo(new Uint8Array(secretBuffer));
-	//});
 	return new Uint8Array(secretBuffer);
 }

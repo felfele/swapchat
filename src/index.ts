@@ -171,9 +171,7 @@ async function startRequest(session: Session, manifestCallback: ManifestCallback
 		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(session, bobSocId);
 		if (userOther !== undefined) {
-			return new Promise((whohoo, doh) => {
-				whohoo();	
-			});
+			return;
 		}
 		await waitUntil(nextCheckTime);
 	}
@@ -188,9 +186,6 @@ async function startResponse(session: object):Promise<any> {
 		data: new Uint8Array(handshakePubOtherBuffer)
 	});
 	const userOther = await connectToPeerTwo(soc.chunk.data);
-	return new Promise((whohoo, doh) => {
-		whohoo();
-	});
 }
 
 
