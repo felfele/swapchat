@@ -3,7 +3,7 @@ import * as swarm from 'swarm-lowlevel';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
 import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix } from './common';
 import { Session } from './session';
-import { Client } from './bee';
+import { BeeClient } from 'bee-client-lib';
 import { encryptAesGcm as encrypt } from './crypto';
 import { decryptAesGcm as decrypt } from './crypto';
 import { hash, derive } from './crypto';
@@ -64,42 +64,41 @@ let chatSession = undefined;
 
 
 // if bz is supplied, will update tmp feed
-async function connectToPeer(handshakeOther:any) {
+async function connectToPeer(session: any, handshakeOther:any) {
 	// set up the user info for the peer
 	// and start the chat session with that info
 	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
 
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
-	const secret = arrayToHex(secretBytes);
 
-	chatSession.setOtherFeed(otherWallet.getAddress('binary'))
-	await chatSession.start(otherWallet.getAddress(), secret);
+	chatSession.setSecret(secretBytes);
+	chatSession.startOtherFeed(secretBytes, otherWallet);
+	await chatSession.start(session);
 	return otherWallet;
 }
 
-async function connectToPeerTwo(handshakeOther:any) {
+async function connectToPeerTwo(session: any, handshakeOther:any) {
 	// NB these are globalsss
 	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
 
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
-	const secret = arrayToHex(secretBytes);
 
-	const bobSocId = chatSession.sharedFeed.next();
-	const soc = new swarm.soc(bobSocId, undefined, tmpWallet);
-	let h = new swarm.fileSplitter(soc.setChunk);
-	h.split(selfWallet.publicKey);
-
-	soc.sign();
-
-	let chunkData = soc.serializeData();
-	let chunkAddress = soc.getAddress();
-	let resultAddress = await updateFeed({
-		data: chunkData,
-		reference: chunkAddress,
-	});
-
-	chatSession.setOtherFeed(otherWallet.getAddress('binary'))
-	await chatSession.start(otherWallet.getAddress(), secret);
+//	const bobSocId = chatSession.sharedFeed.next();
+//	const soc = new swarm.soc(bobSocId, undefined, tmpWallet);
+//	let h = new swarm.fileSplitter(soc.setChunk);
+//	h.split(selfWallet.publicKey);
+//
+//	soc.sign();
+//
+//	let chunkData = soc.serializeData();
+//	let chunkAddress = soc.getAddress();
+//	let resultAddress = await updateFeed({
+//		data: chunkData,
+//		reference: chunkAddress,
+//	});
+	chatSession.setSecret(secretBytes);
+	chatSession.startOtherFeed(secretBytes, otherWallet);
+	await chatSession.start(session);
 	return otherWallet;
 }
 
@@ -111,17 +110,19 @@ async function downloadFromFeed(session: any, wallet: wallet.Wallet, socId:strin
 	return await chatSession.client.downloadChunk(arrayToHex(socAddress));
 }
 
-async function checkResponse(session: any, socId: any):Promise<string|undefined> {
+//async function checkResponse(session: any, socId: any):Promise<string|undefined> {
+async function checkResponse(session: any):Promise<string|undefined> {
 	try {
-		const handshakeOtherBuffer = await downloadFromFeed(session, tmpWallet, socId);
-		const soc = swarm.socFromSocChunk({
-			data: new Uint8Array(handshakeOtherBuffer)
-		});
-		const userOther = await connectToPeer(soc.chunk.data);
-		return userOther;
+		//const handshakeOtherBuffer = await downloadFromFeed(session, tmpWallet, socId);
+		const handshakeOtherBuffer = await session.getHandshake();
+		//const soc = swarm.socFromSocChunk({
+		//	data: new Uint8Array(handshakeOtherBuffer)
+		//});
+		const userOther = await connectToPeer(session, soc.chunk.data);
+		return;
 	} catch (e) {
 		console.error('no response yet...');
-		return undefined;
+		return;
 	}
 }
 
@@ -148,29 +149,33 @@ async function updateData(ch) {
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(session: Session, manifestCallback: ManifestCallback):Promise<any> {
 
-	const aliceSocId = chatSession.sharedFeed.next();
-	const soc = new swarm.soc(aliceSocId, undefined, tmpWallet);
+//	const aliceSocId = chatSession.sharedFeed.next();
+//	const soc = new swarm.soc(aliceSocId, undefined, tmpWallet);
+//
+//	let h = new swarm.fileSplitter(soc.setChunk);
+//	h.split(selfWallet.publicKey);
+//
+//	soc.sign();
+//
+//	let chunkData = soc.serializeData();
+//	let chunkAddress = soc.getAddress();
+//	let resultAddress = await updateFeed({
+//		data: chunkData,
+//		reference: chunkAddress,
+//	});
 
-	let h = new swarm.fileSplitter(soc.setChunk);
-	h.split(selfWallet.publicKey);
+	//session.updateFeed(selfWallet.publicKey);
+	session.sendHandshake();
 
-	soc.sign();
-
-	let chunkData = soc.serializeData();
-	let chunkAddress = soc.getAddress();
-	let resultAddress = await updateFeed({
-		data: chunkData,
-		reference: chunkAddress,
-	});
-
-	let privateKeyHex = arrayToHex(tmpWallet.privateKey);
-	manifestCallback("", privateKeyHex);
-	const bobSocId = chatSession.sharedFeed.next();
+//	let privateKeyHex = arrayToHex(tmpWallet.privateKey);
+//	manifestCallback("", privateKeyHex);
+//	const bobSocId = chatSession.sharedFeed.next();
 
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
-		const userOther = await checkResponse(session, bobSocId);
+		const userOther = await checkResponse(session); //;, bobSocId);
 		if (userOther !== undefined) {
+			session.startOtherFeed();
 			return;
 		}
 		await waitUntil(nextCheckTime);
@@ -178,19 +183,20 @@ async function startRequest(session: Session, manifestCallback: ManifestCallback
 }
 
 async function startResponse(session: object):Promise<any> {
-	let f = chatSession.sharedFeed;
-	let aliceSocId = f.next();
+	//let f = chatSession.sharedFeed;
+	//let aliceSocId = f.next();
 
-	const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, aliceSocId); //topicTmp, REQUEST_PUBLIC_KEY_INDEX);
-	const soc = swarm.socFromSocChunk({
-		data: new Uint8Array(handshakePubOtherBuffer)
-	});
-	const userOther = await connectToPeerTwo(soc.chunk.data);
+	//const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, aliceSocId); //topicTmp, REQUEST_PUBLIC_KEY_INDEX);
+	//const soc = swarm.socFromSocChunk({
+	//	data: new Uint8Array(handshakePubOtherBuffer)
+	//});
+	const soc = session.getHandshake()
+	const userOther = await connectToPeerTwo(session, soc.chunk.data);
 }
 
 
 const newSession = (gatewayAddress: string, messageCallback: any) => {
-	const client = new Client(gatewayAddress);
+	const client = new BeeClient(gatewayAddress);
 
 	let secretHex = undefined;
 	const sendEnvelope = async (envelope) => {
@@ -222,31 +228,33 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		}
 		return sendEnvelope(envelope)
 	}
-	const poll = async (otherFeed: any) => {
+	//const poll = async (otherFeed: any) => {
+	const poll = async (session:any) => {
 		while (true) {
 			try {
-				let socId = otherFeed.current();
-				console.debug('poll', arrayToHex(socId), arrayToHex(otherFeed.topic), otherFeed.index, arrayToHex(otherWallet.publicKey));
-				const message = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
+				console.debug('poll', session.otherFeed); //arrayToHex(socId), arrayToHex(otherFeed.topic), otherFeed.index, arrayToHex(otherWallet.publicKey));
+				//let socId = otherFeed.current();
+				//const message = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
+				const message = session.getOtherFeed();
 				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
 				//const messageReference = await decrypt(encryptedReference, secretHex);
 				//const response = await client.downloadChunk(messageReference);
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				console.debug('got', message);
-				otherFeed.next();
+				//otherFeed.next();
 				messageCallback({
 					payload: () => message,
 				});
 			} catch (e) {
-				console.log('polled in vain for ' + otherFeed.index + '...');
+				console.log('polled in vain for other...');
 				break;
 			}
 		}
-		setTimeout(poll, MSGPERIOD, otherFeed);
+		setTimeout(poll, MSGPERIOD, session);
 	}
-	const address = selfWallet.getAddress('binary')
-	chatSession = new Session(client, topicTmpArray, address);
+	//const address = selfWallet.getAddress('binary')
+	chatSession = new Session(client, selfWallet, tmpWallet); //topicTmpArray, address);
 	chatSession.sendMessage = async (message: string) => {
 			// const encryptedMessage = await encrypt(message, secretHex);
 			//const encryptedMessage = new TextEncoder().encode(message);
@@ -257,25 +265,27 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 			// const encryptedReferenceBytes = Buffer.from(encryptedReference)
 			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 
-			const otherSocId = chatSession.selfFeed.next();
-			const soc = new swarm.soc(otherSocId, undefined, selfWallet);
+			//const otherSocId = chatSession.selfFeed.next();
+			//const soc = new swarm.soc(otherSocId, undefined, selfWallet);
 
-			let h = new swarm.fileSplitter(soc.setChunk);
-			h.split(message);
+			//let h = new swarm.fileSplitter(soc.setChunk);
+			//h.split(message);
 
-			soc.sign();
+			//soc.sign();
 
-			let chunkData = soc.serializeData();
-			let chunkAddress = soc.getAddress();
-			let resultAddress = await updateFeed({
-				data: chunkData,
-				reference: chunkAddress,
-			});
+			//let chunkData = soc.serializeData();
+			//let chunkAddress = soc.getAddress();
+//			let resultAddress = await updateFeed({
+//				data: chunkData,
+//				reference: chunkAddress,
+//			});
+			chatSession.client.updateFeedWithTopic(message);
 		};
 	// TODO: move def to session, with polling as part of constructor
-	chatSession.start = async (userOther: string, secret: string) => {
-			secretHex = secret;
-			await poll(chatSession.otherFeed);
+	//chatSession.start = async (userOther: string, secret: string) => {
+	//chatSession.start = async (session: any, secret: string) => {
+	chatSession.start = async (session: any) => {
+			await poll(session); //;chatSession.otherFeed);
 	};
 	return chatSession;
 }
