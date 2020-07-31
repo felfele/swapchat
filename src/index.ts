@@ -21,7 +21,7 @@ function getTmpPrivKey(): any {
 	if (typeof window !== 'undefined' && window != null && window.location != null && window.location.search != null && window.location.search.length > 0) {
 		const key = window.location.search.slice(1);
 		console.debug("using tmpPrivKey from browser: " + key);
-		return key;
+		return hexToArray(key);
 	}
 	// dev cheat for setting other user (2 is first arg after `ts-node scriptname`)
 	if (process.argv.length > 2) {
@@ -129,6 +129,7 @@ async function updateData(ch) {
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(session: Session, manifestCallback: ManifestCallback):Promise<any> {
 	session.sendHandshake();
+	manifestCallback("", arrayToHex(tmpWallet.privateKey));
 	// hack to increment the session index by one
 	session.client.feeds[session.tmpWallet.address].index++;
 	for (;;) {
@@ -195,7 +196,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				console.debug('got', message);
 				messageCallback({
-					payload: () => message,
+					type: 'message',
+					message: message.chunk.data
 				});
 			} catch (e) {
 				console.log('polled in vain for other...' + e);
@@ -206,7 +208,7 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	}
 	//const address = selfWallet.getAddress('binary')
 	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined); //topicTmpArray, address);
-	chatSession.sendMessage = async (message: string) => {
+	chatSession.sendMessage = async (message: any) => {
 			// const encryptedMessage = await encrypt(message, secretHex);
 			//const encryptedMessage = new TextEncoder().encode(message);
 
