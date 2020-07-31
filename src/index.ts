@@ -68,9 +68,7 @@ async function connectToPeer(session: any, handshakeOther:any) {
 	// set up the user info for the peer
 	// and start the chat session with that info
 	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
-
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
-
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
 	await chatSession.start(session);
@@ -79,25 +77,14 @@ async function connectToPeer(session: any, handshakeOther:any) {
 
 async function connectToPeerTwo(session: any, handshakeOther:any) {
 	// NB these are globalsss
+	console.log(handshakeOther);
 	otherWallet = wallet.newReadOnlyWallet(handshakeOther);
 
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 
-//	const bobSocId = chatSession.sharedFeed.next();
-//	const soc = new swarm.soc(bobSocId, undefined, tmpWallet);
-//	let h = new swarm.fileSplitter(soc.setChunk);
-//	h.split(selfWallet.publicKey);
-//
-//	soc.sign();
-//
-//	let chunkData = soc.serializeData();
-//	let chunkAddress = soc.getAddress();
-//	let resultAddress = await updateFeed({
-//		data: chunkData,
-//		reference: chunkAddress,
-//	});
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
+	chatSession.sendHandshake();
 	await chatSession.start(session);
 	return otherWallet;
 }
@@ -110,18 +97,12 @@ async function downloadFromFeed(session: any, wallet: wallet.Wallet, socId:strin
 	return await chatSession.client.downloadChunk(arrayToHex(socAddress));
 }
 
-//async function checkResponse(session: any, socId: any):Promise<string|undefined> {
 async function checkResponse(session: any):Promise<string|undefined> {
 	try {
-		//const handshakeOtherBuffer = await downloadFromFeed(session, tmpWallet, socId);
-		const handshakeOtherBuffer = await session.getHandshake();
-		//const soc = swarm.socFromSocChunk({
-		//	data: new Uint8Array(handshakeOtherBuffer)
-		//});
-		const userOther = await connectToPeer(session, soc.chunk.data);
-		return;
+		const soc = await session.getHandshake();
+		return await connectToPeer(session, soc.chunk.data);
 	} catch (e) {
-		console.error('no response yet...');
+		console.error('no response yet...' + e);
 		return;
 	}
 }
@@ -131,7 +112,6 @@ async function updateFeed(ch) {
 }
 
 async function updateData(ch) {
-	//console.debug('updatechunk', ch);
 	let dataLength = ch.span.length + ch.data.length;
 	let data = new Uint8Array(dataLength);
 	for (let i = 0; i < ch.span.length; i++) {
@@ -148,50 +128,24 @@ async function updateData(ch) {
 
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(session: Session, manifestCallback: ManifestCallback):Promise<any> {
-
-//	const aliceSocId = chatSession.sharedFeed.next();
-//	const soc = new swarm.soc(aliceSocId, undefined, tmpWallet);
-//
-//	let h = new swarm.fileSplitter(soc.setChunk);
-//	h.split(selfWallet.publicKey);
-//
-//	soc.sign();
-//
-//	let chunkData = soc.serializeData();
-//	let chunkAddress = soc.getAddress();
-//	let resultAddress = await updateFeed({
-//		data: chunkData,
-//		reference: chunkAddress,
-//	});
-
-	//session.updateFeed(selfWallet.publicKey);
 	session.sendHandshake();
-
-//	let privateKeyHex = arrayToHex(tmpWallet.privateKey);
-//	manifestCallback("", privateKeyHex);
-//	const bobSocId = chatSession.sharedFeed.next();
-
+	// hack to increment the session index by one
+	session.client.feeds[session.tmpWallet.address].index++;
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
 		const userOther = await checkResponse(session); //;, bobSocId);
 		if (userOther !== undefined) {
-			session.startOtherFeed();
+			//connectToPeerTwo(session, userOther);
 			return;
 		}
 		await waitUntil(nextCheckTime);
 	}
 }
 
-async function startResponse(session: object):Promise<any> {
-	//let f = chatSession.sharedFeed;
-	//let aliceSocId = f.next();
-
-	//const handshakePubOtherBuffer = await downloadFromFeed(session, tmpWallet, aliceSocId); //topicTmp, REQUEST_PUBLIC_KEY_INDEX);
-	//const soc = swarm.socFromSocChunk({
-	//	data: new Uint8Array(handshakePubOtherBuffer)
-	//});
-	const soc = session.getHandshake()
+async function startResponse(session: any):Promise<any> {
+	const soc = await session.getHandshake()
 	const userOther = await connectToPeerTwo(session, soc.chunk.data);
+	return true
 }
 
 
@@ -232,29 +186,26 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const poll = async (session:any) => {
 		while (true) {
 			try {
-				console.debug('poll', session.otherFeed); //arrayToHex(socId), arrayToHex(otherFeed.topic), otherFeed.index, arrayToHex(otherWallet.publicKey));
-				//let socId = otherFeed.current();
-				//const message = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
-				const message = session.getOtherFeed();
+				console.debug('poll', session.otherFeed); 
+				const message = await session.getOtherFeed();
 				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
 				//const messageReference = await decrypt(encryptedReference, secretHex);
 				//const response = await client.downloadChunk(messageReference);
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				console.debug('got', message);
-				//otherFeed.next();
 				messageCallback({
 					payload: () => message,
 				});
 			} catch (e) {
-				console.log('polled in vain for other...');
+				console.log('polled in vain for other...' + e);
 				break;
 			}
 		}
 		setTimeout(poll, MSGPERIOD, session);
 	}
 	//const address = selfWallet.getAddress('binary')
-	chatSession = new Session(client, selfWallet, tmpWallet); //topicTmpArray, address);
+	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined); //topicTmpArray, address);
 	chatSession.sendMessage = async (message: string) => {
 			// const encryptedMessage = await encrypt(message, secretHex);
 			//const encryptedMessage = new TextEncoder().encode(message);
@@ -279,7 +230,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 //				data: chunkData,
 //				reference: chunkAddress,
 //			});
-			chatSession.client.updateFeedWithTopic(message);
+			let r = await chatSession.client.updateFeedWithSalt(chatSession.secret, message, chatSession.selfWallet);
+			console.log(r);
 		};
 	// TODO: move def to session, with polling as part of constructor
 	//chatSession.start = async (userOther: string, secret: string) => {
