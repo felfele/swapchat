@@ -5,7 +5,8 @@
         <script defer src="qrcode.min.js"></script>
         <script defer src="index.js"></script>
         <script>
-            var gatewayAddress = "https://swarm2.fairdatasociety.org/";
+            var host = "http://localhost:8888/"; //with trailing slash
+            var gatewayAddress = "http://localhost:8083"; //no trailing slash
             var debug = window.location.search.indexOf('debug') > 0;
 
             function log() {
@@ -116,13 +117,14 @@
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
-                var bzzPart = linkHash !== "/" ? "bzz:/" + linkHash + "/" : "";
-                log('makeManifestLink', {bzzPart, linkHash, sharedPrivateKey});
-                return gatewayAddress + bzzPart + "?" + sharedPrivateKey;
+                // var bzzPart = linkHash !== "/" ? "bzz" + linkHash + "/" : "";
+                // let bzzPart = 'files';
+                log('makeManifestLink', {linkHash, sharedPrivateKey});
+                return host + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
-                if (pathname.indexOf("/bzz:/") === 0) {
+                if (pathname.indexOf("/bzz/") === 0) {
                     return pathname.slice(6).replace("/", "");
                 }
                 return pathname;
@@ -145,7 +147,6 @@
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
                 log('onLoad', debug, window.location.search);
                 log('location', {location: window.location});
-                gatewayAddress = location.origin + "/";
 
                 log('before init', gatewayAddress);
                 try {
@@ -161,7 +162,7 @@
                         },
                         manifestCallback: function(linkHash, sharedPrivateKey) {
                             removeLoading();
-                            var linkHash = getLinkHash(window.location.pathname);
+                            var linkHash = getLinkHash(host);
                             var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
                             addQRCodeToHistory(manifestLink);
                             addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', 'bot');
