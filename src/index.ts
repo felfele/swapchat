@@ -261,7 +261,7 @@ export function init(params: {
 		startRequest(chatSession, params.manifestCallback).then(() => {
 			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
-			setTimeout(() => chatSession.sendMessage("alice"), 5 * 1000)
+			// setTimeout(() => chatSession.sendMessage("alice"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
@@ -271,7 +271,7 @@ export function init(params: {
 		startResponse(chatSession).then(() => {
 			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
-			setTimeout(() => chatSession.sendMessage("bob"), 5 * 1000)
+			// setTimeout(() => chatSession.sendMessage("bob"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting response: ", e);
 			log("error starting response: ", e);
