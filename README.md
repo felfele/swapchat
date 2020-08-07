@@ -62,3 +62,9 @@ server {
     }
 }
 ```
+
+### Deploy
+
+```
+curl -vv -F file=@dist-html-only/index.html  http://localhost:8083/files
+```

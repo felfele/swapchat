@@ -5,12 +5,17 @@
         <script defer src="qrcode.min.js"></script>
         <script defer src="index.js"></script>
         <script>
-            var host = "http://localhost:8080/"; //with trailing slash
-            var gatewayAddress = "http://localhost:8083"; //no trailing slash
+
+
 
             let prod = true;
 
             if(prod){
+                var gatewayAddress = "http://localhost:8083"; //no trailing slash
+                var host = gatewayAddress + "/files/"; //with trailing slash and files/ if on bee
+            }else{
+                var gatewayAddress = "http://localhost:8083"; //no trailing slash
+                var host = "http://localhost:8080/"; //with trailing slash
 
             }
 
@@ -124,10 +129,13 @@
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
-                // var bzzPart = linkHash !== "/" ? "bzz" + linkHash + "/" : "";
-                // let bzzPart = 'files';
-                log('makeManifestLink', {linkHash, sharedPrivateKey});
-                return host + "?" + sharedPrivateKey;
+                if(prod){
+                    var reference = window.location.href.split('/')[4];
+                }else{
+                    var reference = '';
+                }
+                log('makeManifestLink', {reference, linkHash, sharedPrivateKey});
+                return host + reference + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
