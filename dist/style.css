@@ -112,6 +112,7 @@ ul.history {
 }
 .history {
     margin: 0 auto;
+    min-height: 86vh;
 }
 .write {
     width: 100%;
