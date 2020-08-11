@@ -72,7 +72,8 @@ async function connectToPeer(session: any, handshakeOther:any) {
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
-	await chatSession.start(session);
+	//await chatSession.start(session);
+	await session.start();
 	return otherWallet;
 }
 
@@ -86,7 +87,8 @@ async function connectToPeerTwo(session: any, handshakeOther:any) {
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
 	chatSession.sendHandshake();
-	await chatSession.start(session);
+	//await chatSession.start(session);
+	await session.start();
 	return otherWallet;
 }
 
@@ -155,93 +157,48 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 	const client = new BeeClient(gatewayAddress);
 
 	let secretHex = undefined;
-	const sendEnvelope = async (envelope) => {
-		const envelopeJson = JSON.stringify(envelope)
-		//const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
-		//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-		//const encryptedReference = await encryptAesGcm(messageReference, secretHex);
-		//const encryptedReferenceBytes = Buffer.from(encryptedReference)
-		//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
-		console.debug('I would have sent this message', envelope);
-		//writeIndex += 1;
-	}
-	const sendMessage = async (message: string) => {
-		const envelope = {
-			type: 'message',
-			message,
-		}
-		return sendEnvelope(envelope)
-	}
-	const sendPing = () => {
-		const envelope = {
-			type: 'ping',
-		}
-		return sendEnvelope(envelope)
-	}
-	const sendDisconnect = () => {
-		const envelope = {
-			type: 'disconnect',
-		}
-		return sendEnvelope(envelope)
-	}
+	
+	
 	//const poll = async (otherFeed: any) => {
 	const poll = async (session:any) => {
 		while (true) {
 			try {
 				console.debug('poll', session.otherFeed); 
-				const message = await session.getOtherFeed();
+				const serializedMessage = await session.getOtherFeed();
 				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
 				//const messageReference = await decrypt(encryptedReference, secretHex);
 				//const response = await client.downloadChunk(messageReference);
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
+				const message = JSON.parse(serializedMessage);
 				console.debug('got', message);
-				messageCallback({
-					type: 'message',
-					message: message.chunk.data
-				});
+				if (message.type == 'ping') {
+					if (message.pong) {
+						session.ping.ponged(message.serial);
+					} else {
+						session.ping.pinged(message.serial);
+					}
+				} else if (message.type == 'disconnect') {
+					console.debug('disconnect received, terminating main loop');
+					return;
+				} else {
+					session.ping.seen();
+					messageCallback({
+						type: 'message',
+						message: message.chunk.data
+					});
+				}
 			} catch (e) {
 				console.log('polled in vain for other...' + e);
 				break;
 			}
 		}
-		setTimeout(poll, MSGPERIOD, session);
+		session.loop = setTimeout(poll, MSGPERIOD, session);
 	}
 	//const address = selfWallet.getAddress('binary')
 	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined); //topicTmpArray, address);
-	chatSession.sendMessage = async (message: any) => {
-			// const encryptedMessage = await encrypt(message, secretHex);
-			//const encryptedMessage = new TextEncoder().encode(message);
-
-			//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
-			// const messageReference = await client.uploadChunk(Buffer.from(encryptedMessage));
-			// const encryptedReference = await encrypt(messageReference, secretHex);
-			// const encryptedReferenceBytes = Buffer.from(encryptedReference)
-			//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
-
-			//const otherSocId = chatSession.selfFeed.next();
-			//const soc = new swarm.soc(otherSocId, undefined, selfWallet);
-
-			//let h = new swarm.fileSplitter(soc.setChunk);
-			//h.split(message);
-
-			//soc.sign();
-
-			//let chunkData = soc.serializeData();
-			//let chunkAddress = soc.getAddress();
-//			let resultAddress = await updateFeed({
-//				data: chunkData,
-//				reference: chunkAddress,
-//			});
-			let r = await chatSession.client.updateFeedWithSalt(chatSession.secret, message, chatSession.selfWallet);
-			console.log(r);
-		};
-	// TODO: move def to session, with polling as part of constructor
-	//chatSession.start = async (userOther: string, secret: string) => {
-	//chatSession.start = async (session: any, secret: string) => {
-	chatSession.start = async (session: any) => {
-			await poll(session); //;chatSession.otherFeed);
-	};
+	chatSession.setPoller(poll);
+	
 	return chatSession;
 }
 

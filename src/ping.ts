@@ -1,47 +1,62 @@
 const PING_TIMEOUT_DEFAULT = 5000;
 
 class Ping {
-	lastSeen: 0;
-	lastPong: 0;
-	pongSerial: 0;
+	lastSeen: number;
+	lastPong: number;
+	otherSerial: number;
 
-	pingTimeout: PING_TIMEOUT_DEFAULT;
-	pingTimer: undefined;
-	pingCallback: undefined;
-	pingSerial: 0;
+	pingTimeout: number; 
+	pingTimer: any;
+	pingCallback: any;
+	selfSerial: number;
 
+	// pingCallback must take two args; bool if true is pong and serial number
 	constructor(pingCallback: any, pingTimeout?: number) {
 		this.pingCallback = pingCallback;
 		if (pingTimeout != undefined) {
 			this.pingTimeout = pingTimeout;
+		} else {
+			this.pingTimeout = PING_TIMEOUT_DEFAULT;
 		}
+		console.debug('initialized ping');
+	}
+
+	public start() {
+		console.debug('starting ping');
 		this.seen();
 	}
 
 	public seen() {
 		this.lastSeen = Date.now();
+		this.restart();
 
 	}
 
 	public restart() {
-		clearTimeout(pingTimer);
+		clearTimeout(this.pingTimer);
 		console.debug('resetting pingtimer');
 		this.pingTimer = setTimeout(this.ping, this.pingTimer);
 	}
 
-	public pong(serial: number) {
-		console.debug('pong last/now', this.lastPongSerial, serial);
+	public ponged(serial: number) {
+		console.debug('pong last/now', this.selfSerial, serial);
 		this.seen(),
-		this.restart();
 		this.lastPong = Date.now();
-		this.lastPongSequence = serial;
+		this.otherSerial = serial;
 	}
 
 	public ping() {
 		this.restart();
-		serial = this.pingSerial;
-		this.pingSerial++;
+		const serial = this.selfSerial;
+		console.debug('sending ping', serial);
+		this.selfSerial++;
 		this.pingCallback(serial);
+	}
+
+	public pinged(serial: number) {
+		console.debug('ping last/now', this.otherSerial, serial);
+		this.seen();
+		this.pingCallback(serial, true);
 	}
 }
 
