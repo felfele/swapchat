@@ -14,6 +14,7 @@ type StateCallback = (topicHex: string) => void;
 const REQUEST_PUBLIC_KEY_INDEX = 0;
 const RESPONSE_PUBLIC_KEY_INDEX = 1;
 const MSGPERIOD = 1000;
+const PINGPERIOD = 5000;
 
 let log = console.log;
 

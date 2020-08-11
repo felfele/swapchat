@@ -18,6 +18,8 @@ class Session {
 	topicSalt;
 	secret: undefined;
 
+	ping: undefined;
+
 	constructor(client: BeeClient, selfWallet: any, tmpWallet: any, skipFirst: boolean = false) {
 		this.initialized = false;
 		this.client = client;
@@ -32,12 +34,12 @@ class Session {
 		this.logFunction = console.debug;
 	}
 
-	// BUG: This won't work until bee-client indexes salted feeds by salt+address
 	public async startOtherFeed(topicSalt, other_wallet) {
 		this.topicSalt = topicSalt;
 		this.selfFeed = this.client.addFeedWithSalt(topicSalt, this.selfWallet);
 		this.otherWallet = other_wallet;
 		this.otherFeed = this.client.addFeedWithSalt(topicSalt, this.otherWallet, 0);
+		lastSeen = Date.now();
 		return true;
 	}
 
