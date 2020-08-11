@@ -164,14 +164,14 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 		while (true) {
 			try {
 				console.debug('poll', session.otherFeed); 
-				const serializedMessage = await session.getOtherFeed();
+				const socMessage = await session.getOtherFeed();
 				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
 				//const messageReference = await decrypt(encryptedReference, secretHex);
 				//const response = await client.downloadChunk(messageReference);
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
-				const message = JSON.parse(serializedMessage);
-				console.debug('got', message);
+				console.debug('got chunk', socMessage);
+				const message = JSON.parse(socMessage.chunk.data);
 				if (message.type == 'ping') {
 					if (message.pong) {
 						session.ping.ponged(message.serial);
@@ -185,7 +185,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 					session.ping.seen();
 					messageCallback({
 						type: 'message',
-						message: message.chunk.data
+						//message: message.chunk.data
+						message: message.data,
 					});
 				}
 			} catch (e) {

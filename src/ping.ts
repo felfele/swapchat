@@ -19,6 +19,10 @@ class Ping {
 			this.pingTimeout = PING_TIMEOUT_DEFAULT;
 		}
 		console.debug('initialized ping');
+		this.selfSerial = 0;
+		this.otherSerial = 0;
+		this.lastSeen = 0;
+		this.lastPong = 0;
 	}
 
 	public start() {
@@ -34,18 +38,19 @@ class Ping {
 
 	public restart() {
 		clearTimeout(this.pingTimer);
-		console.debug('resetting pingtimer');
-		this.pingTimer = setTimeout(this.ping, this.pingTimer);
+		console.debug('resetting pingtimer', this.pingTimer);
+		this.pingTimer = setTimeout(this.ping, this.pingTimeout);
 	}
 
 	public ponged(serial: number) {
+		
 		console.debug('pong last/now', this.selfSerial, serial);
 		this.seen(),
 		this.lastPong = Date.now();
 		this.otherSerial = serial;
 	}
 
-	public ping() {
+	public ping = (self: any) => {
 		this.restart();
 		const serial = this.selfSerial;
 		console.debug('sending ping', serial);
@@ -54,6 +59,9 @@ class Ping {
 	}
 
 	public pinged(serial: number) {
+		if (Date.now() - this.lastSeen < this.pingTimeout) {
+			console.debug('dropping premature pong reply');
+		}
 		console.debug('ping last/now', this.otherSerial, serial);
 		this.seen();
 		this.pingCallback(serial, true);

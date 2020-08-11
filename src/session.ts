@@ -82,15 +82,15 @@ class Session {
 		clearTimeout(this.loop);
 	}
 
-	public async sendMessage(message: string) {
+	public sendMessage = async (message: string) => {
 		this.ping.restart();
 		const envelope = {
 			type: 'message',
-			message,
+			data: message,
 		}
 		this.sendEnvelope(envelope)
 	}
-	public async sendPing(serial: number, pong?: boolean) {
+	public sendPing = async (serial: number, pong?: boolean) => {
 		const envelope = {
 			type: 'ping',
 			pong: pong,
@@ -98,7 +98,7 @@ class Session {
 		}
 		this.sendEnvelope(envelope)
 	}
-	public async sendDisconnect() {
+	public sendDisconnect = async () => {
 		this.stop();
 		console.debug('terminated main loop');
 		const envelope = {
@@ -107,7 +107,7 @@ class Session {
 		this.sendEnvelope(envelope)
 	}
 
-	public async sendEnvelope (envelope:any) {
+	public sendEnvelope = async (envelope:any) => {
 		const envelopeJson = JSON.stringify(envelope)
 		//const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
 		//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
