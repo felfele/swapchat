@@ -1,4 +1,5 @@
 node_modules
 .vscode
 build
-dist
+dist/index.js
+dist-html-only

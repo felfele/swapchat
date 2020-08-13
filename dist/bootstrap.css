@@ -221,13 +221,13 @@ textarea {
   }
 }
 
-@font-face {
+/*@font-face {
   font-family: 'DOS';
   font-style: normal;
   font-weight: normal;
   src: url('fonts/Fixedsys500c.eot');
   src: local('☺'), url('fonts/Fixedsys500c.woff') format('woff'), url('fonts/Fixedsys500c.ttf') format('truetype'), url('fonts/Fixedsys500c.svg') format('svg');
-}
+}*/
 
 body {
   margin: 0;

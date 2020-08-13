@@ -2,13 +2,13 @@ import { init } from './index';
 
 // set up the session object
 function logMessage(msg) {
-	console.log("got message: " + msg.payload());
+	console.debug("got message", msg.payload());
 }
 
 init({
-	gatewayAddress: 'http://localhost:8500/',
+	gatewayAddress: 'http://localhost:8080',
 	messageCallback: logMessage,
 	manifestCallback: () => {},
 	stateCallback: () => {},
-	logFunction: console.log,
+	logFunction: console.debug,
 });

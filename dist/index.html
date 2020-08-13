@@ -5,7 +5,6 @@
         <script defer src="qrcode.min.js"></script>
         <script defer src="index.js"></script>
         <script>
-            var gatewayAddress = "https://swarm2.fairdatasociety.org/";
             var debug = window.location.search.indexOf('debug') > 0;
 
             function log() {
@@ -111,18 +110,20 @@
                 }
                 var html = makeHTMLMessage(text);
                 addMessageToHistory(html, 'mine');
-                send(text);
+                let uint8Array = new TextEncoder().encode(text);
+                send(uint8Array);
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
-                var bzzPart = linkHash !== "/" ? "bzz:/" + linkHash + "/" : "";
-                log('makeManifestLink', {bzzPart, linkHash, sharedPrivateKey});
-                return gatewayAddress + bzzPart + "?" + sharedPrivateKey;
+                var filesPart = linkHash !== "/" ? "/files/" + linkHash : "";
+                log('makeManifestLink', {filesPart, linkHash, sharedPrivateKey});
+                return gatewayAddress + filesPart + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
-                if (pathname.indexOf("/bzz:/") === 0) {
-                    return pathname.slice(6).replace("/", "");
+                const endpoint = "/files/";
+                if (pathname.indexOf(endpoint) === 0) {
+                    return pathname.slice(endpoint.length).replace("/", "");
                 }
                 return pathname;
             }
@@ -144,7 +145,8 @@
                 document.getElementById("chatinput").addEventListener("keypress", submitOnEnter);
                 log('onLoad', debug, window.location.search);
                 log('location', {location: window.location});
-                gatewayAddress = location.origin + "/";
+
+                gatewayAddress = location.origin;
 
                 log('before init', gatewayAddress);
                 try {
@@ -153,7 +155,7 @@
                         messageCallback: function(msg) {
                             log('messageCallback', msg);
                             if (msg.type == 'message') {
-                                addMessageToHistory(makeHTMLMessage(msg.message), 'your');
+                                addMessageToHistory(makeHTMLMessage(new TextDecoder().decode(msg.message)), 'your');
                             } else if (msg.type == 'disconnect') {
                                 addMessageToHistory('Your peer is disconnected', 'bot');
                             }
@@ -163,7 +165,7 @@
                             var linkHash = getLinkHash(window.location.pathname);
                             var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
                             addQRCodeToHistory(manifestLink);
-                            addMessageToHistory('<a onclick="copyToClipboard()">click here to copy your link...</a>', 'bot');
+                            addMessageToHistory('<a onclick="copyToClipboard()">copy link</a>', 'bot');
                         },
                         stateCallback: function() {
                             log('stateCallback');
@@ -183,260 +185,10 @@
             }
         </script>
 
+        <link rel="stylesheet" href="DOS.css">
         <link rel="stylesheet" href="bootstrap.css">
         <link rel="stylesheet" href="bootstrap-responsive.css">
-
-        <style>
-
-html, body{
-    height: 100%;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    position: fixed;
-}
-
-.name {
-    font-size: 4vmax;
-}
-
-.mainContainer {
-    height: 100%;
-    width: 100%;
-    flex: 1 0 auto;
-    display: flex;
-    flex-direction: column;
-    justify-content: stretch;
-    position: fixed;
-}
-
-.container {
-    display: -webkit-flexbox;
-    display: -ms-flexbox;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-flex-align: center;
-    -ms-flex-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    justify-content: center;
-    flex: 1;
-    flex-direction: column;
-}
-
-.inputContainer {
-    width: 90%;
-    display: -webkit-flexbox;
-    display: -ms-flexbox;
-    display: -webkit-flex;
-    display: flex;
-    -webkit-flex-align: center;
-    -ms-flex-align: center;
-    -webkit-align-items: center;
-    align-items: center;
-    justify-content: center;
-    flex-direction: row;
-}
-
-.link {
-    font-size: 2.0vh;
-    width: 60vw;
-}
-
-.qrcode {
-    width: 300;
-    height: 300;
-}
-
-.copyButton {
-    font-size: 3vmax;
-}
-
-.sendButton {
-    font-size: 3vmax;
-    width: 15vw;
-    margin-right: 1vw;
-    height: 6vmax;
-    background: lightgrey;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-.chat {
-    flex: 1;
-    overflow: hidden;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: stretch;
-}
-
-p.message {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    padding: 2.3vmax;
-    background-color: #ddd;
-    color: #006DF0;
-    max-width: 70%;
-    margin: 0.2vmax;
-    font-size: 3.2vmax;
-    line-height: 3.2vmax;
-}
-p.message.your {
-    margin-left: 10;
-    color: rgb(109, 108, 108);
-}
-p.message.mine {
-    background-color: #006DF0;
-    color: #fff;
-    margin-right: 10;
-}
-p.message.log {
-    font-size: 1.5vmax;
-    color: black;
-    padding: 0.2vmax;
-    margin: 0;
-    word-break: break-all;
-    white-space: normal;
-    max-width: 95%;
-}
-p.status {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-end;
-    padding: 0.3vmax;
-    max-width: 70%;
-    font-size: 90%;
-    color: lightgrey;
-}
-.entry {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: center;
-    max-width: 100%;
-}
-.entry.your {
-    justify-content: flex-start;
-}
-.entry.mine {
-    justify-content: flex-end;
-}
-ul.history {
-    list-style: none;
-    max-width: 100%;
-    /* width: 100%; */
-    transition: all 0.444s cubic-bezier(0.7, 0, 0.3, 1);
-    overflow-y: scroll;
-    overflow-x: hidden;
-    padding: 0;
-    margin: 0;
-    padding-bottom: 10;
-    background-color: white;
-    flex: 1;
-    padding: 20px;
-}
-.history {
-    margin: 0 auto;
-}
-#chatname {
-    margin-top: 1.5vmax;
-    margin-left: 40%;
-    height: 6vmax;
-}
-.write input {
-    float: left;
-    width: 75%;
-    height: 6vmax;
-    margin-top: 1vmax;
-    padding: 2vmax 0.5vmax;
-    color: #1a1a1a;
-    border: 0;
-    outline: none;
-    font-size: 2.5vmax;
-    padding-left: 20px;
-    border-radius: 0;
-}
-input.nostyle {
-    border: 0;
-    width: 90%;
-    padding: 12px 0 12px 0;
-    background: transparent;
-    font-size: 3vmax;
-}
-.write {
-    width: 100%;
-    height: 8vmax;
-    margin-left: 30px;
-    margin-bottom: 17px;
-    margin-top: 14px;
-}
-.sendcontainer, .sendcontainer-desktop {
-    position: relative;
-    float: left;
-    height: 100%;
-    display: none;
-    justify-content: center;
-    align-items: center;
-    margin-left: 29px;
-}
-
-.sendcontainer-desktop{
-    display: flex;
-}
-
-
-.send {
-    width: 4vmax;
-    height: 4vmax;
-    cursor: pointer;
-    display:table-cell;
-    vertical-align:middle;
-}
-
-.icon{
-    display: inline;
-    font-size:20px;
-}
-
-@media (max-width: 600px) {
-  .sendcontainer-desktop {
-    display: none !important;
-  }
-
-  .sendcontainer {
-    display: flex;
-    }
-
-  .write input {
-    width: 62%;
-    }
-}
-
-.pulsate {
-    animation: pulsate 1.5s ease-out;
-    animation-iteration-count: infinite;
-    opacity: 0.5;
-}
-@keyframes pulsate {
-    0% {
-        opacity: 0.5;
-    }
-    50% {
-        opacity: 1.0;
-    }
-    100% {
-        opacity: 0.5;
-    }
-}
-        </style>
+        <link rel="stylesheet" href="style.css">
     </head>
     <body onload="onLoad()" onbeforeunload="onBeforeUnload()" >
         <div class="mainContainer">
@@ -445,6 +197,7 @@ input.nostyle {
                     <li class="entry bot">
                         <p class="message bot">Welcome to SwapChat!</p>
                     </li>
+                    <div class="logo"></div>
                     <li class="entry bot">
                         <p class="message bot" id="loading">Loading<span class="pulsate">...</span></p>
                     </li>
