@@ -5,20 +5,6 @@
         <script defer src="qrcode.min.js"></script>
         <script defer src="index.js"></script>
         <script>
-
-
-
-            let prod = true;
-
-            if(prod){
-                var gatewayAddress = "http://localhost:8083"; //no trailing slash
-                var host = gatewayAddress + "/files/"; //with trailing slash and files/ if on bee
-            }else{
-                var gatewayAddress = "http://localhost:8083"; //no trailing slash
-                var host = "http://localhost:8080/"; //with trailing slash
-
-            }
-
             var debug = window.location.search.indexOf('debug') > 0;
 
             function log() {
@@ -129,18 +115,15 @@
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
-                if(prod){
-                    var reference = window.location.href.split('/')[4];
-                }else{
-                    var reference = '';
-                }
-                log('makeManifestLink', {reference, linkHash, sharedPrivateKey});
-                return host + reference + "?" + sharedPrivateKey;
+                var filesPart = linkHash !== "/" ? "/files/" + linkHash : "";
+                log('makeManifestLink', {filesPart, linkHash, sharedPrivateKey});
+                return gatewayAddress + filesPart + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
-                if (pathname.indexOf("/bzz/") === 0) {
-                    return pathname.slice(6).replace("/", "");
+                const endpoint = "/files/";
+                if (pathname.indexOf(endpoint) === 0) {
+                    return pathname.slice(endpoint.length).replace("/", "");
                 }
                 return pathname;
             }
@@ -163,6 +146,8 @@
                 log('onLoad', debug, window.location.search);
                 log('location', {location: window.location});
 
+                gatewayAddress = location.origin;
+
                 log('before init', gatewayAddress);
                 try {
                     init({
@@ -177,7 +162,7 @@
                         },
                         manifestCallback: function(linkHash, sharedPrivateKey) {
                             removeLoading();
-                            var linkHash = getLinkHash(host);
+                            var linkHash = getLinkHash(window.location.pathname);
                             var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
                             addQRCodeToHistory(manifestLink);
                             addMessageToHistory('<a onclick="copyToClipboard()">copy link</a>', 'bot');

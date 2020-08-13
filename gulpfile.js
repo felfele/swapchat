@@ -10,7 +10,7 @@ exports.default = function() {
   .pipe(
   posthtml([
     posthtmlInlineAssets({
-    	cwd: '/Users/sig/Code/swarm2/swapchat/dist'
+    	cwd: 'dist'
     })
   ])
   ).pipe(dest('dist-html-only/'));
@@ -27,7 +27,7 @@ let inline_js_css = function() {
   .pipe(
   posthtml([
     posthtmlInlineAssets({
-    	cwd: '/Users/sig/Code/swarm2/swapchat/dist'
+    	cwd: 'dist'
     })
   ])
   ).pipe(dest('dist-html-only/'));
@@ -52,4 +52,4 @@ exports.default = series(
 
 // .pipe(inlineFonts({ name: 'icons' }))
 
-// exports.default = 
+// exports.default =
