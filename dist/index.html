@@ -110,8 +110,7 @@
                 }
                 var html = makeHTMLMessage(text);
                 addMessageToHistory(html, 'mine');
-                let uint8Array = new TextEncoder().encode(text);
-                send(uint8Array);
+                send(text);
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
@@ -155,7 +154,7 @@
                         messageCallback: function(msg) {
                             log('messageCallback', msg);
                             if (msg.type == 'message') {
-                                addMessageToHistory(makeHTMLMessage(new TextDecoder().decode(msg.message)), 'your');
+                                addMessageToHistory(makeHTMLMessage(msg.message), 'your');
                             } else if (msg.type == 'disconnect') {
                                 addMessageToHistory('Your peer is disconnected', 'bot');
                             }
