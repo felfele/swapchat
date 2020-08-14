@@ -115,7 +115,8 @@ class Session {
 		//const encryptedReferenceBytes = Buffer.from(encryptedReference)
 		//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 		//let r = await this.client.updateFeedWithSalt(chatSession.secret, JSON.stringify(envelope), chatSession.selfWallet);
-		let r = await this.client.updateFeedWithSalt(this.secret, JSON.stringify(envelope), this.selfWallet);
+		const envelopeJsonBytes = new TextEncoder().encode(envelopeJson);
+		let r = await this.client.updateFeedWithSalt(this.secret, envelopeJsonBytes, this.selfWallet);
 		console.log(r);
 		//writeIndex += 1;
 	}

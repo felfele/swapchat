@@ -153,7 +153,7 @@ async function startResponse(session: any):Promise<any> {
 }
 
 
-const newSession = (gatewayAddress: string, messageCallback: any) => {
+const newSession = (gatewayAddress: string, messageCallback: any, pingCallback: any, disconnectCallback: any) => {
 	const client = new BeeClient(gatewayAddress);
 
 	let secretHex = undefined;
@@ -171,15 +171,18 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				console.debug('got chunk', socMessage);
-				const message = JSON.parse(socMessage.chunk.data);
+				const messageData = new TextDecoder().decode(socMessage.chunk.data);
+				const message = JSON.parse(messageData);
 				if (message.type == 'ping') {
 					if (message.pong) {
 						session.ping.ponged(message.serial);
 					} else {
 						session.ping.pinged(message.serial);
+						pingCallback(message.serial);
 					}
 				} else if (message.type == 'disconnect') {
 					console.debug('disconnect received, terminating main loop');
+					disconnectCallback();
 					return;
 				} else {
 					session.ping.seen();
@@ -206,6 +209,8 @@ const newSession = (gatewayAddress: string, messageCallback: any) => {
 export function init(params: {
 	gatewayAddress: string,
 	messageCallback: any,
+	pingCallback: any,
+	disconnectCallback: any,
 	manifestCallback: ManifestCallback,
 	stateCallback: StateCallback,
 	logFunction: (...args: any[]) => void,
@@ -214,7 +219,12 @@ export function init(params: {
 	log('init called');
 
 	// TODO: this guy is global. let's pass him around instead, perhaps?
-	chatSession = newSession(params.gatewayAddress, params.messageCallback);
+	chatSession = newSession(
+		params.gatewayAddress,
+		params.messageCallback,
+		params.pingCallback,
+		params.disconnectCallback,
+	);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
 		startRequest(chatSession, params.manifestCallback).then(() => {
