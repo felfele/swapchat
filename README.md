@@ -20,7 +20,7 @@ Then build the app:
  $ npm run pack-html-only
 ```
 
-This builds the app in a single html file in the `dist` directory. You can upload it to Bee with the `upload.sh` command:
+This builds the app in a single html file in the `dist` directory. You can upload it to Bee with the `upload.sh` command (curl is required):
 
 ```
  $ ./upload.sh http://localhost:8080
