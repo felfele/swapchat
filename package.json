@@ -6,8 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "ts-node src/start.ts",
-    "pack": "tsc --outDir build src/index.ts && npx webpack && npm run fix-dist",
-    "pack-html-only": "tsc --outDir build src/index.ts && npx webpack && npm run fix-dist && gulp",
+    "pack": "tsc && npx webpack && npm run fix-dist",
+    "pack-html-only": "tsc && npx webpack && npm run fix-dist && gulp",
     "postinstall": "cp node_modules/qrcode/build/qrcode.min.js dist",
     "fix-dist": "node util/fixdist"
   },
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@types/chai": "^4.2.11",
     "@types/mocha": "^5.2.7",
+    "@types/node": "^14.0.27",
     "chai": "^4.2.0",
     "grunt-posthtml": "^0.5.0",
     "gulp": "^4.0.2",
@@ -24,7 +25,6 @@
     "gulp-posthtml": "^3.0.5",
     "jest": "^24.9.0",
     "mocha": "^6.2.2",
-    "node-fetch": "^2.6.0",
     "node-webcrypto-ossl": "^2.1.1",
     "posthtml": "^0.13.1",
     "posthtml-inline-assets": "^3.1.0",
@@ -35,13 +35,8 @@
     "webpack-cli": "^3.3.11"
   },
   "dependencies": {
-    "@erebos/keccak256": "^0.7.0",
-    "@erebos/secp256k1": "^0.7.0",
-    "@erebos/swarm": "^0.12.0",
-    "@erebos/swarm-node": "^0.12.0",
+    "bee-client-lib": "git+https://github.com/wendydv1989/bee-client-lib",
     "eccrypto": "^1.1.3",
-    "secp256k1": "^3.8.0",
-    "swarm-lowlevel": "git+https://gitlab.com/nolash/swarm-lowlevel-js",
-    "bee-client-lib": "git+https://github.com/wendydv1989/bee-client-lib"
+    "swarm-lowlevel": "git+https://gitlab.com/nolash/swarm-lowlevel-js"
   }
 }

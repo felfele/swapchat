@@ -1,7 +1,8 @@
 {
     "compilerOptions": {
         "resolveJsonModule": true,
-        "outDir": "build"
+        "outDir": "build",
+        "lib": ["ES2015", "ES2015.Promise", "DOM"],
     },
     "files": ["src/index.ts"]
 }
