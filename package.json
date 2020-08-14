@@ -19,19 +19,20 @@
     "@types/mocha": "^5.2.7",
     "chai": "^4.2.0",
     "grunt-posthtml": "^0.5.0",
+    "gulp": "^4.0.2",
     "gulp-inline-fonts": "^1.2.1",
     "gulp-posthtml": "^3.0.5",
     "jest": "^24.9.0",
     "mocha": "^6.2.2",
     "node-fetch": "^2.6.0",
+    "node-webcrypto-ossl": "^2.1.1",
     "posthtml": "^0.13.1",
     "posthtml-inline-assets": "^3.1.0",
     "qrcode": "^1.4.4",
     "ts-node": "^8.6.2",
     "typescript": "^3.8.3",
     "webpack": "^4.42.0",
-    "webpack-cli": "^3.3.11",
-    "gulp": "^4.0.2"
+    "webpack-cli": "^3.3.11"
   },
   "dependencies": {
     "@erebos/keccak256": "^0.7.0",
