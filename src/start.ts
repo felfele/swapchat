@@ -1,7 +1,7 @@
 import { init } from './index';
 
 if ((typeof process !== 'undefined') && (typeof process.versions.node !== 'undefined')) {
-	const { Crypto } = require("node" + "-webcrypto-ossl");
+	const { Crypto } = require("node-webcrypto-ossl");
 	global.crypto = new Crypto({
 		directory: "key_storage"
 	})
