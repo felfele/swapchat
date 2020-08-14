@@ -2,7 +2,6 @@ import * as wallet from 'swarm-lowlevel/unsafewallet';
 import { hexToArray, arrayToHex, waitUntil, stripHexPrefix } from './common';
 import { Session } from './session';
 import { BeeClient } from 'bee-client-lib';
-import { encryptAesGcm as encrypt } from './crypto';
 import { decryptAesGcm as decrypt } from './crypto';
 import { hash, derive } from './crypto';
 
@@ -10,6 +9,7 @@ type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
 
 const MSGPERIOD = 1000;
+const PINGPERIOD = 5000;
 
 let log = console.log;
 
@@ -67,7 +67,8 @@ async function connectToPeer(session: any, handshakeOther:any) {
 	const secretBytes = await derive(selfWallet.privateKey, otherWallet.publicKey);
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
-	await chatSession.start(session);
+	//await chatSession.start(session);
+	await session.start();
 	return otherWallet;
 }
 
@@ -81,7 +82,8 @@ async function connectToPeerTwo(session: any, handshakeOther:any) {
 	chatSession.setSecret(secretBytes);
 	chatSession.startOtherFeed(secretBytes, otherWallet);
 	chatSession.sendHandshake();
-	await chatSession.start(session);
+	//await chatSession.start(session);
+	await session.start();
 	return otherWallet;
 }
 
@@ -118,65 +120,65 @@ async function startResponse(session: any):Promise<any> {
 }
 
 
-const newSession = (gatewayAddress: string, messageCallback: any) => {
-	const sendEnvelope = async (envelope) => {
-		const envelopeJson = JSON.stringify(envelope)
-		console.debug('I would have sent this message', envelope);
-	}
-	const sendMessage = async (message: string) => {
-		const envelope = {
-			type: 'message',
-			message,
-		}
-		return sendEnvelope(envelope)
-	}
-	const sendPing = () => {
-		const envelope = {
-			type: 'ping',
-		}
-		return sendEnvelope(envelope)
-	}
-	const sendDisconnect = () => {
-		const envelope = {
-			type: 'disconnect',
-		}
-		return sendEnvelope(envelope)
-	}
+const newSession = (gatewayAddress: string, messageCallback: any, pingCallback: any, disconnectCallback: any) => {
+	const client = new BeeClient(gatewayAddress);
+
+	let secretHex = undefined;
+	
+	
+	//const poll = async (otherFeed: any) => {
 	const poll = async (session:any) => {
 		while (true) {
 			try {
-				// console.debug('poll', session.otherFeed);
-				const soc = await session.getOtherFeed();
-				console.debug('got', soc);
-				const message = await decrypt(soc.chunk.data, session.secret);
-				messageCallback({
-					type: 'message',
-					message,
-				});
+				console.debug('poll', session.otherFeed); 
+				const socMessage = await session.getOtherFeed();
+				//const encryptedReference = await downloadFromFeed(client, otherWallet, socId); //topicTmp); //, readIndex);
+				//const messageReference = await decrypt(encryptedReference, secretHex);
+				//const response = await client.downloadChunk(messageReference);
+				//const encryptedArrayBuffer = await response.arrayBuffer();
+				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
+				console.debug('got chunk', socMessage);
+				const messagePlain = await decrypt(socMessage.chunk.data, session.secret);
+				const message = JSON.parse(messagePlain);
+				if (message.type == 'ping') {
+					if (message.pong) {
+						session.ping.ponged(message.serial);
+					} else {
+						session.ping.pinged(message.serial);
+						pingCallback(message.serial);
+					}
+				} else if (message.type == 'disconnect') {
+					console.debug('disconnect received, terminating main loop');
+					disconnectCallback();
+					return;
+				} else {
+					session.ping.seen();
+					messageCallback({
+						type: 'message',
+						//message: message.chunk.data
+						message: message.data,
+					});
+				}
 			} catch (e) {
 				// console.log('polled in vain for other...' + e);
 				break;
 			}
 		}
-		setTimeout(poll, MSGPERIOD, session);
+		session.loop = setTimeout(poll, MSGPERIOD, session);
 	}
 
-	const client = new BeeClient(gatewayAddress);
-	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined);
-	chatSession.sendMessage = async (message: string) => {
-		const encryptedMessage = await encrypt(message, chatSession.secret);
-		let r = await chatSession.client.updateFeedWithSalt(chatSession.secret, encryptedMessage, chatSession.selfWallet);
-	};
+	//const address = selfWallet.getAddress('binary')
+	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined); //topicTmpArray, address);
+	chatSession.setPoller(poll);
 
-	chatSession.start = async (session: any) => {
-		await poll(session);
-	};
 	return chatSession;
 }
 
 export function init(params: {
 	gatewayAddress: string,
 	messageCallback: any,
+	pingCallback: any,
+	disconnectCallback: any,
 	manifestCallback: ManifestCallback,
 	stateCallback: StateCallback,
 	logFunction: (...args: any[]) => void,
@@ -185,7 +187,12 @@ export function init(params: {
 	log('init called');
 
 	// TODO: this guy is global. let's pass him around instead, perhaps?
-	chatSession = newSession(params.gatewayAddress, params.messageCallback);
+	chatSession = newSession(
+		params.gatewayAddress,
+		params.messageCallback,
+		params.pingCallback,
+		params.disconnectCallback,
+	);
 	if (keyTmpRequestPriv === undefined) {
 		log('start request');
 		startRequest(chatSession, params.manifestCallback).then(() => {

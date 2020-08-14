@@ -1,11 +1,11 @@
 import { BeeClient } from 'bee-client-lib';
+import { Ping } from './ping';
+import { encryptAesGcm as encrypt } from './crypto';
 
 class Session {
 	initialized: boolean;
 	client: any;
 	logFunction: any;
-	sendMessage: any;
-	start: any;
 
 	selfWallet;
 	otherWallet;
@@ -17,6 +17,11 @@ class Session {
 
 	topicSalt;
 	secret: undefined;
+
+	ping: Ping;
+
+	poller: any;
+	loop: any;
 
 	constructor(client: BeeClient, selfWallet: any, tmpWallet: any, skipFirst: boolean = false) {
 		this.initialized = false;
@@ -30,9 +35,9 @@ class Session {
 			this.sharedFeed = client.addFeed(tmpWallet); //new dfeeds.indexed(topic);
 		}
 		this.logFunction = console.debug;
+		this.ping = new Ping(this.sendPing);
 	}
 
-	// BUG: This won't work until bee-client indexes salted feeds by salt+address
 	public async startOtherFeed(topicSalt, other_wallet) {
 		this.topicSalt = topicSalt;
 		this.selfFeed = this.client.addFeedWithSalt(topicSalt, this.selfWallet);
@@ -68,6 +73,66 @@ class Session {
 
 	public setSecret(secret) {
 		this.secret = secret;
+	}
+
+	public setPinger(pinger: any) {
+		this.ping = pinger;
+	}
+
+	public stop() {
+		clearTimeout(this.loop);
+	}
+
+	public sendMessage = async (message: string) => {
+		this.ping.restart();
+		const envelope = {
+			type: 'message',
+			data: message,
+		}
+		this.sendEnvelope(envelope)
+	}
+	public sendPing = async (serial: number, pong?: boolean) => {
+		const envelope = {
+			type: 'ping',
+			pong: pong,
+			serial: serial,
+		}
+		this.sendEnvelope(envelope)
+	}
+	public sendDisconnect = async () => {
+		this.stop();
+		console.debug('terminated main loop');
+		const envelope = {
+			type: 'disconnect',
+		}
+		this.sendEnvelope(envelope)
+	}
+
+	public sendEnvelope = async (envelope:any) => {
+		const envelopeJson = JSON.stringify(envelope)
+		//const encryptedMessage = await encryptAesGcm(envelopeJson, secretHex);
+		//const messageReference = await bzz.upload(Buffer.from(encryptedMessage));
+		//const encryptedReference = await encryptAesGcm(messageReference, secretHex);
+		//const encryptedReferenceBytes = Buffer.from(encryptedReference)
+		//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
+		//let r = await this.client.updateFeedWithSalt(chatSession.secret, JSON.stringify(envelope), chatSession.selfWallet);
+		//const envelopeJsonBytes = new TextEncoder().encode(envelopeJson);
+		console.debug('debug json', envelopeJson);
+		const encryptedEnvelope = await encrypt(envelopeJson, this.secret);
+		console.debug('debug env', encryptedEnvelope);
+		let r = await this.client.updateFeedWithSalt(this.secret, encryptedEnvelope, this.selfWallet);
+		console.log(r);
+		//writeIndex += 1;
+	}
+
+	public setPoller(poller: any) {
+		this.poller = poller;
+	}
+
+	public async start() {
+		this.ping.start();
+		this.loop = setTimeout(this.poller, 0, this);
+		//await this.poller(this); 
 	}
 };
 
