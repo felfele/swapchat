@@ -1,18 +1,13 @@
-import * as dfeeds from 'dfeeds';
-import * as swarm from 'swarm-lowlevel';
 import * as wallet from 'swarm-lowlevel/unsafewallet';
-import { hexToArray, arrayToHex, waitMillisec, waitUntil, stripHexPrefix } from './common';
+import { hexToArray, arrayToHex, waitUntil, stripHexPrefix } from './common';
 import { Session } from './session';
 import { BeeClient } from 'bee-client-lib';
-import { encryptAesGcm as encrypt } from './crypto';
 import { decryptAesGcm as decrypt } from './crypto';
 import { hash, derive } from './crypto';
 
 type ManifestCallback = (manifest: string, sharedPrivateKey: string) => void;
 type StateCallback = (topicHex: string) => void;
 
-const REQUEST_PUBLIC_KEY_INDEX = 0;
-const RESPONSE_PUBLIC_KEY_INDEX = 1;
 const MSGPERIOD = 1000;
 const PINGPERIOD = 5000;
 
@@ -61,7 +56,7 @@ topicTmpArray = topicTmpArray.slice(0, 20);
 console.log('topic', arrayToHex(topicTmpArray));
 
 // the master session
-let chatSession = undefined;
+let chatSession: Session = undefined;
 
 
 // if bz is supplied, will update tmp feed
@@ -92,14 +87,6 @@ async function connectToPeerTwo(session: any, handshakeOther:any) {
 	return otherWallet;
 }
 
-async function downloadFromFeed(session: any, wallet: wallet.Wallet, socId:string):Promise<any|Buffer> {
-	let otherAddress = wallet.getAddress('binary');
-	let s = new swarm.soc(socId, undefined, undefined);
-	s.setOwnerAddress(otherAddress);
-	let socAddress = s.getAddress();
-	return await chatSession.client.downloadChunk(arrayToHex(socAddress));
-}
-
 async function checkResponse(session: any):Promise<string|undefined> {
 	try {
 		const soc = await session.getHandshake();
@@ -110,25 +97,6 @@ async function checkResponse(session: any):Promise<string|undefined> {
 	}
 }
 
-async function updateFeed(ch) {
-	return await chatSession.client.uploadChunk(ch);
-}
-
-async function updateData(ch) {
-	let dataLength = ch.span.length + ch.data.length;
-	let data = new Uint8Array(dataLength);
-	for (let i = 0; i < ch.span.length; i++) {
-		data[i] = ch.span[i];
-	}
-	for (let i = 0; i < ch.data.length; i++) {
-		data[i+ch.span.length] = ch.data[i];
-	}
-	let h = await chatSession.client.uploadChunk({
-		data: data,
-		reference: ch.reference
-	});
-}
-
 // Handle the handshake from the peer that responds to the invitation
 async function startRequest(session: Session, manifestCallback: ManifestCallback):Promise<any> {
 	session.sendHandshake();
@@ -137,9 +105,8 @@ async function startRequest(session: Session, manifestCallback: ManifestCallback
 	session.client.feeds[session.tmpWallet.address].index++;
 	for (;;) {
 		const nextCheckTime = Date.now() + 1000;
-		const userOther = await checkResponse(session); //;, bobSocId);
+		const userOther = await checkResponse(session);
 		if (userOther !== undefined) {
-			//connectToPeerTwo(session, userOther);
 			return;
 		}
 		await waitUntil(nextCheckTime);
@@ -171,8 +138,8 @@ const newSession = (gatewayAddress: string, messageCallback: any, pingCallback: 
 				//const encryptedArrayBuffer = await response.arrayBuffer();
 				//const message = await decrypt(new Uint8Array(encryptedArrayBuffer), secretHex);
 				console.debug('got chunk', socMessage);
-				const messageData = new TextDecoder().decode(socMessage.chunk.data);
-				const message = JSON.parse(messageData);
+				const messagePlain = await decrypt(socMessage.chunk.data, session.secret);
+				const message = JSON.parse(messagePlain);
 				if (message.type == 'ping') {
 					if (message.pong) {
 						session.ping.ponged(message.serial);
@@ -193,16 +160,17 @@ const newSession = (gatewayAddress: string, messageCallback: any, pingCallback: 
 					});
 				}
 			} catch (e) {
-				console.log('polled in vain for other...' + e);
+				// console.log('polled in vain for other...' + e);
 				break;
 			}
 		}
 		session.loop = setTimeout(poll, MSGPERIOD, session);
 	}
+
 	//const address = selfWallet.getAddress('binary')
 	chatSession = new Session(client, selfWallet, tmpWallet, keyTmpRequestPriv != undefined); //topicTmpArray, address);
 	chatSession.setPoller(poll);
-	
+
 	return chatSession;
 }
 
@@ -230,7 +198,6 @@ export function init(params: {
 		startRequest(chatSession, params.manifestCallback).then(() => {
 			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
-			// setTimeout(() => chatSession.sendMessage("alice"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting request: ", e);
 			log("error starting request: ", e);
@@ -240,7 +207,6 @@ export function init(params: {
 		startResponse(chatSession).then(() => {
 			let topicHex = arrayToHex(topicTmpArray);
 			params.stateCallback(topicHex);
-			// setTimeout(() => chatSession.sendMessage("bob"), 5 * 1000)
 		}).catch((e) => {
 			console.error("error starting response: ", e);
 			log("error starting response: ", e);
@@ -258,7 +224,7 @@ export function send(message: string) {
 
 export function disconnect() {
 	try {
-		chatSession.sendDisconnect();
+		// chatSession.sendDisconnect();
 	} catch(e) {
 		console.error(e);
 	}

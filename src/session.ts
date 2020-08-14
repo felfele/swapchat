@@ -1,5 +1,6 @@
 import { BeeClient } from 'bee-client-lib';
 import { Ping } from './ping';
+import { encryptAesGcm as encrypt } from './crypto';
 
 class Session {
 	initialized: boolean;
@@ -115,8 +116,11 @@ class Session {
 		//const encryptedReferenceBytes = Buffer.from(encryptedReference)
 		//const r = await uploadToRawFeed(bzz, userSelf, topicTmp, writeIndex, encryptedReferenceBytes);
 		//let r = await this.client.updateFeedWithSalt(chatSession.secret, JSON.stringify(envelope), chatSession.selfWallet);
-		const envelopeJsonBytes = new TextEncoder().encode(envelopeJson);
-		let r = await this.client.updateFeedWithSalt(this.secret, envelopeJsonBytes, this.selfWallet);
+		//const envelopeJsonBytes = new TextEncoder().encode(envelopeJson);
+		console.debug('debug json', envelopeJson);
+		const encryptedEnvelope = await encrypt(envelopeJson, this.secret);
+		console.debug('debug env', encryptedEnvelope);
+		let r = await this.client.updateFeedWithSalt(this.secret, encryptedEnvelope, this.selfWallet);
 		console.log(r);
 		//writeIndex += 1;
 	}

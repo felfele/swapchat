@@ -1,18 +1,11 @@
 import * as ec from 'eccrypto'; // TODO: move derive to wallet
 import * as keccak from 'keccak';
 
-import { hexToArray, stripHexPrefix } from './common';
-
-// TODO remove nodejs hack
-const crypto = require('crypto');
-crypto.getRandomValues = crypto.randomBytes
-
-export const encryptAesGcm = async (message: string, secretHex: string): Promise<Uint8Array> => {
+export const encryptAesGcm = async (message: string, secret: Uint8Array): Promise<Uint8Array> => {
 	try {
 		const iv = crypto.getRandomValues(new Uint8Array(12));
-		const secretArray = hexToArray(stripHexPrefix(secretHex));
 		const data = new TextEncoder().encode(message);
-		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
+		const secretKey = await crypto.subtle.importKey('raw', secret, 'AES-GCM', true, ['encrypt', 'decrypt']);
 		const ciphertext = await crypto.subtle.encrypt({
 			name: 'AES-GCM',
 			iv,
@@ -26,12 +19,11 @@ export const encryptAesGcm = async (message: string, secretHex: string): Promise
 	}
 }
 
-export const decryptAesGcm = async (encryptedData: Uint8Array, secretHex: string): Promise<string> => {
+export const decryptAesGcm = async (encryptedData: Uint8Array, secret: Uint8Array): Promise<string> => {
 	try {
 		const iv = encryptedData.slice(0, 12);
 		const ciphertext = encryptedData.slice(12);
-		const secretArray = hexToArray(secretHex);
-		const secretKey = await crypto.subtle.importKey('raw', secretArray, 'AES-GCM', true, ['encrypt', 'decrypt']);
+		const secretKey = await crypto.subtle.importKey('raw', secret, 'AES-GCM', true, ['encrypt', 'decrypt']);
 		const cleartext = await crypto.subtle.decrypt({
 			name: 'AES-GCM',
 			iv,

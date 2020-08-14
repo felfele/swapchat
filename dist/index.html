@@ -5,20 +5,6 @@
         <script defer src="qrcode.min.js"></script>
         <script defer src="index.js"></script>
         <script>
-
-
-
-            let prod = true;
-
-            if(prod){
-                var gatewayAddress = "http://localhost:8083"; //no trailing slash
-                var host = gatewayAddress + "/files/"; //with trailing slash and files/ if on bee
-            }else{
-                var gatewayAddress = "http://localhost:8083"; //no trailing slash
-                var host = "http://localhost:8080/"; //with trailing slash
-
-            }
-
             var debug = window.location.search.indexOf('debug') > 0;
 
             function log() {
@@ -124,23 +110,19 @@
                 }
                 var html = makeHTMLMessage(text);
                 addMessageToHistory(html, 'mine');
-                let uint8Array = new TextEncoder().encode(text);
-                send(uint8Array);
+                send(text);
             }
 
             function makeManifestLink(linkHash, sharedPrivateKey) {
-                if(prod){
-                    var reference = window.location.href.split('/')[4];
-                }else{
-                    var reference = '';
-                }
-                log('makeManifestLink', {reference, linkHash, sharedPrivateKey});
-                return host + reference + "?" + sharedPrivateKey;
+                var filesPart = linkHash !== "/" ? "/files/" + linkHash : "";
+                log('makeManifestLink', {filesPart, linkHash, sharedPrivateKey});
+                return gatewayAddress + filesPart + "?" + sharedPrivateKey;
             }
 
             function getLinkHash(pathname) {
-                if (pathname.indexOf("/bzz/") === 0) {
-                    return pathname.slice(6).replace("/", "");
+                const endpoint = "/files/";
+                if (pathname.indexOf(endpoint) === 0) {
+                    return pathname.slice(endpoint.length).replace("/", "");
                 }
                 return pathname;
             }
@@ -163,6 +145,8 @@
                 log('onLoad', debug, window.location.search);
                 log('location', {location: window.location});
 
+                gatewayAddress = location.origin;
+
                 log('before init', gatewayAddress);
                 try {
                     init({
@@ -170,14 +154,14 @@
                         messageCallback: function(msg) {
                             log('messageCallback', msg);
                             if (msg.type == 'message') {
-                                addMessageToHistory(makeHTMLMessage(new TextDecoder().decode(msg.message)), 'your');
+                                addMessageToHistory(makeHTMLMessage(msg.message), 'your');
                             } else if (msg.type == 'disconnect') {
                                 addMessageToHistory('Your peer is disconnected', 'bot');
                             }
                         },
                         manifestCallback: function(linkHash, sharedPrivateKey) {
                             removeLoading();
-                            var linkHash = getLinkHash(host);
+                            var linkHash = getLinkHash(window.location.pathname);
                             var manifestLink = makeManifestLink(linkHash, sharedPrivateKey);
                             addQRCodeToHistory(manifestLink);
                             addMessageToHistory('<a onclick="copyToClipboard()">copy link</a>', 'bot');
