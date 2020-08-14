@@ -5,7 +5,7 @@ module.exports = {
 	output: {
 		libraryTarget: 'window'
 	},
-	mode: 'development',
+	mode: 'production',
 	performance: {
 		hints: false
 	},
