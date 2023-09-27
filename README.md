@@ -8,7 +8,13 @@ The project was initally done as a Swarm Hackweek Madrid 2019 project as a colla
 
 ### Building and running the app
 
-First, install the dependencies:
+First, ensure you are using a (somewhat old enough) version of node:
+
+```
+ $ nvm use lts/fermium
+```
+
+Second, install the dependencies:
 
 ```
  $ npm install
